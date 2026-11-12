@@ -1,0 +1,38 @@
+/* Mermaid 图形容器：超宽图在块内横向滚动，不撑破正文或预览弹窗。 */
+.cf-mermaid {
+  margin: 16px 0;
+  padding: 12px;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--cf-border);
+  border-radius: 8px;
+  background: var(--cf-panel);
+}
+
+.cf-mermaid-svg {
+  display: flex;
+  justify-content: center;
+}
+
+.cf-mermaid-svg svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.cf-mermaid-loading {
+  color: var(--cf-muted);
+  font-size: 13px;
+}
+
+.cf-mermaid-error {
+  margin-bottom: 8px;
+  color: var(--cf-error);
+  font-size: 13px;
+}
+
+.cf-mermaid-source {
+  margin: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+}

@@ -1,0 +1,260 @@
+/* ===== 登录页:设计契约 v5「终端连接」版式(替代原 editorial/流星版)。
+   固定亮色不随主题;调色板令牌自包含在 .login-screen。
+   左栏 = 网格底纹 + CODE FLOW_ 字标 + 启动自检日志;右栏 = 平面表单(8px 圆角)。
+   字体不走 CDN,等宽用系统 mono 栈。 ===== */
+.login-screen {
+  --lg-paper: #f7f8fa;
+  --lg-ink: #14161a;
+  --lg-ink-rgb: 20, 22, 26;
+  --lg-ink2: #5b6470;
+  --lg-ink2-rgb: 91, 100, 112;
+  --lg-hair: #e3e5e8;
+  --lg-onfill: #ffffff;
+  --lg-accent: #2383e2;
+  --lg-ok: #0f9d6b;
+  --lg-fail: #d64545;
+  --lg-mono: "SFMono-Regular", Consolas, "JetBrains Mono", ui-monospace, monospace;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  font-family: -apple-system, "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background-color: var(--lg-paper);
+  /* TestOPS 同款 editorial 背景:右上/左下两团淡蓝光晕(参数逐值一致) */
+  background-image:
+    radial-gradient(900px 600px at 90% 10%, rgba(94, 140, 224, .10), transparent 60%),
+    radial-gradient(700px 500px at 8% 92%, rgba(94, 140, 224, .08), transparent 60%);
+  color: var(--lg-ink);
+}
+.login-screen *, .login-screen *::before, .login-screen *::after { box-sizing: border-box; }
+
+/* 右上角功能簇(语言切换):mono 小字,贴角 */
+.login-screen .lg-corner { position: absolute; top: 18px; right: 22px; z-index: 3; display: flex; align-items: center; gap: 6px; }
+.login-screen .lg-corner .ant-btn { width: 28px; height: 28px; padding: 0; border: 0; background: transparent; color: var(--lg-ink2); box-shadow: none; border-radius: 6px; }
+.login-screen .lg-corner .ant-btn:hover { color: var(--lg-accent); background: rgba(var(--lg-ink2-rgb), .06); }
+
+/* ── 流星层:TestOPS 同款(2026-11-10)。
+   垫在 .split 之下,纯装饰。纪律 = 长周期 + 错峰负延迟 + 只动 transform/opacity。
+   --len 长度 / --t 周期 / --dl 负延迟错峰 / --op 峰值不透明度。
+   匀速组 8 颗 × 25% 可见窗口(周期 16s、相位均分)= 恒定 2 条;
+   随机组 1 颗(.mt-rush,组件内每圈重摇)= 常驻 1 条。2 + 1 = 3。 ── */
+.login-screen .lqa-meteors { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.login-screen .mt { position: absolute; opacity: 0; will-change: transform, opacity; animation: lqaMeteor var(--t, 16s) linear infinite; animation-delay: var(--dl, 0s); }
+.login-screen .mt i {
+  display: block;
+  width: 1.5px;
+  height: var(--len, 180px);
+  border-radius: 99px;
+  transform: rotate(36deg);
+  transform-origin: 50% 0;
+  background: linear-gradient(to bottom, rgba(94, 140, 224, 0) 0%, rgba(94, 140, 224, .12) 38%, rgba(94, 140, 224, .45) 80%, var(--lg-onfill) 100%);
+  filter: drop-shadow(0 0 6px rgba(94, 140, 224, .45));
+}
+@keyframes lqaMeteor {
+  0% { transform: translate3d(0, 0, 0); opacity: 0; }
+  1.5% { opacity: var(--op, .8); }
+  19% { opacity: var(--op, .8); }
+  25% { transform: translate3d(-46vw, 58vh, 0); opacity: 0; }
+  100% { transform: translate3d(-46vw, 58vh, 0); opacity: 0; }
+}
+/* 随机加速条:整圈在飞,先匀速一段(60% 时间走 50% 路程)再猛冲,速度台阶式突变 */
+.login-screen .mt-rush { animation: lqaMeteorRush var(--t, 3.6s) linear infinite; animation-delay: var(--dl, 0s); }
+@keyframes lqaMeteorRush {
+  0% { transform: translate3d(0, 0, 0); opacity: 0; }
+  4% { opacity: var(--op, .8); }
+  60% { transform: translate3d(-23vw, 29vh, 0); }
+  96% { opacity: var(--op, .8); }
+  100% { transform: translate3d(-46vw, 58vh, 0); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .login-screen .mt { animation: none; opacity: 0; } }
+
+.login-screen .split { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 1fr; width: min(1040px, 96vw); min-height: 620px; background: transparent; }
+
+/* 左栏:字标 + 自检日志(透明融入纸底,与 TestOPS editorial 版式一致) */
+.login-screen .left { position: relative; padding: 44px 46px; display: flex; flex-direction: column; background: transparent; border-right: 1px solid var(--lg-hair); overflow: hidden; }
+.login-screen .left > * { position: relative; }
+.login-screen .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 40px; }
+.login-screen .logo-wrap { width: 26px; height: 26px; border-radius: 5px; background: var(--lg-ink); display: flex; align-items: center; justify-content: center; flex: none; overflow: hidden; }
+.login-screen .logo-wrap img { width: 24px; height: 24px; display: block; object-fit: contain; }
+.login-screen .brand-eyebrow { font-family: var(--lg-mono); font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--lg-ink2); }
+
+.login-screen .wordmark { font-family: var(--lg-mono); font-weight: 700; font-size: 42px; line-height: 1.12; letter-spacing: .04em; color: var(--lg-ink); }
+.login-screen .wordmark em { font-style: normal; color: var(--lg-accent); }
+/* 终端光标下划线(纯装饰,不进文案) */
+.login-screen .wordmark::after { content: '_'; color: var(--lg-accent); }
+.login-screen .stamp { margin-top: 12px; font-family: var(--lg-mono); font-size: 10.5px; letter-spacing: .05em; color: var(--lg-ink2); }
+
+.login-screen .lv-value { margin-top: auto; padding-top: 16px; border-top: 1px dashed var(--lg-hair); }
+
+/* ── 深色玻璃卡「从需求到交付」(2026-11-11 视觉评审重设计) ──
+ * 亮纸底上放一块深色渐变玻璃卡:需求打字 → 光点带渐变线逐站点亮 → 「已交付」徽章。
+ * 强对比让价值区成为左栏视觉锚点;所有文字用白色系,强调色唯一(accent)。 */
+.login-screen .lvx-card {
+  position: relative;
+  margin-top: 16px;
+  border-radius: 14px;
+  padding: 18px 22px 24px;
+  background: linear-gradient(150deg, #101c30 0%, #0c1424 58%, #101c30 100%);
+  border: 1px solid rgba(255, 255, 255, .08);
+  box-shadow: 0 18px 40px -18px rgba(4, 12, 28, .8), inset 0 1px 0 rgba(255, 255, 255, .06);
+  overflow: hidden;
+}
+.login-screen .lvx-card::before {
+  /* 顶部微光:一条 accent 渐变发丝线,呼应轨道 */
+  content: '';
+  position: absolute; inset: 0 0 auto 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(84, 158, 235, .55), transparent);
+}
+.login-screen .lvx-label {
+  font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+  color: rgba(255, 255, 255, .55); margin-bottom: 12px;
+}
+.login-screen .lvx-type {
+  font-size: 12.5px; color: #eaf1fa;
+  background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .10);
+  border-radius: 99px; padding: 5px 14px;
+  display: inline-block; max-width: 100%;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.login-screen .lvx-cursor {
+  display: inline-block; width: 1px; height: 13px;
+  background: #6db3f7; vertical-align: -2px;
+  animation: lvxCursorBlink .8s step-end infinite;
+}
+@keyframes lvxCursorBlink { 50% { opacity: 0; } }
+
+/* 轨道与光点 */
+.login-screen .lvx-flow { position: relative; margin-top: 30px; }
+.login-screen .lvx-track {
+  position: absolute; left: 17px; right: 17px; top: 19px;
+  height: 3px; border-radius: 99px;
+  background: rgba(255, 255, 255, .12);
+}
+.login-screen .lvx-fill {
+  position: absolute; left: 17px; top: 19px; height: 3px; width: 0;
+  background: linear-gradient(90deg, #1b5fb8, #54a2f0);
+  border-radius: 99px;
+  transition: width .5s cubic-bezier(.45, .05, .55, .95);
+  box-shadow: 0 0 10px rgba(84, 162, 240, .5);
+}
+.login-screen .lvx-head {
+  position: absolute; left: 17px; top: 15px; width: 11px; height: 11px;
+  border-radius: 50%; background: #fff;
+  box-shadow: 0 0 14px rgba(120, 190, 255, .95);
+  transition: left .5s cubic-bezier(.45, .05, .55, .95), opacity .3s;
+  z-index: 3;
+}
+/* 节点:圆形玻璃环 → done 时 accent 渐变填充 */
+.login-screen .lvx-nodes {
+  position: relative; z-index: 2;
+  display: flex; justify-content: space-between;
+}
+.login-screen .lvx-node {
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  width: 46px;
+}
+.login-screen .lvx-node-ring {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: rgba(255, 255, 255, .08);
+  border: 1.5px solid rgba(255, 255, 255, .22);
+  color: rgba(255, 255, 255, .75);
+  transition: all .4s cubic-bezier(.34, 1.4, .64, 1);
+}
+.login-screen .lvx-node-name {
+  font-size: 10.5px; font-weight: 550;
+  color: rgba(255, 255, 255, .55);
+  white-space: nowrap;
+  transition: color .4s;
+}
+.login-screen .lvx-node.done .lvx-node-ring {
+  background: linear-gradient(160deg, #2d8ded, #1b5fb8);
+  border-color: rgba(255, 255, 255, .35);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(45, 141, 237, .45);
+}
+.login-screen .lvx-node.done .lvx-node-name { color: #fff; }
+.login-screen .lvx-node.end .lvx-node-ring {
+  background: linear-gradient(160deg, #0f9d6b, #0c7a54);
+  border-color: rgba(255, 255, 255, .4);
+  box-shadow: 0 4px 18px rgba(15, 157, 107, .5);
+}
+/* done 态勾:覆盖在图标上 */
+.login-screen .lvx-check {
+  position: absolute; inset: 0; display: none;
+  place-items: center; font-size: 15px; font-weight: 700; color: #fff;
+}
+.login-screen .lvx-node.done .lvx-check { display: grid; }
+
+/* 「已交付」徽章:accent 渐变 + 光晕,悬于链尾上方 */
+.login-screen .lvx-badge {
+  position: absolute; right: 18px; top: 64px; z-index: 3;
+  font-size: 11.5px; font-weight: 700; color: #fff;
+  background: linear-gradient(160deg, #2d8ded, #1b5fb8);
+  border-radius: 99px; padding: 4px 14px;
+  box-shadow: 0 6px 18px rgba(45, 141, 237, .5);
+  opacity: 0; transform: translateY(6px) scale(.85);
+  transition: opacity .35s, transform .35s cubic-bezier(.34, 1.56, .64, 1);
+}
+.login-screen .lvx-badge.pop { opacity: 1; transform: translateY(0) scale(1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .login-screen .lvx-fill, .login-screen .lvx-head { transition: none; }
+  .login-screen .lvx-cursor { animation: none; }
+}
+
+/* 轮播的价值主张:淡入上移换句 */
+.login-screen .lv-line {
+  margin: 14px 0 0;
+  min-height: 2.6em;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--lg-ink2);
+  animation: lvLineIn .45s ease both;
+}
+@keyframes lvLineIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.login-screen .lv-dots { display: flex; gap: 6px; margin-top: 10px; }
+.login-screen .lv-dots i { width: 5px; height: 5px; border-radius: 99px; background: var(--lg-hair); transition: background-color .3s, width .3s; }
+.login-screen .lv-dots i.on { width: 14px; background: var(--lg-accent); }
+
+/* 右栏:表单 */
+.login-screen .right { padding: 56px 54px; display: flex; flex-direction: column; justify-content: center; }
+.login-screen .tag { font-family: var(--lg-mono); font-size: 10px; letter-spacing: .2em; color: var(--lg-accent); text-transform: uppercase; margin-bottom: 10px; }
+.login-screen .h1 { font-size: 24px; font-weight: 600; letter-spacing: -.01em; margin: 0 0 24px; color: var(--lg-ink); line-height: 1.25; }
+
+/* SSO 连接区 */
+.login-screen .sso-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.login-screen .sso-link { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 10px 12px; font-size: 13px; color: var(--lg-ink); text-decoration: none; border: 1px solid var(--lg-hair); border-radius: 8px; background: var(--lg-onfill); transition: border-color .16s, background .16s; }
+.login-screen .sso-link:hover { border-color: var(--lg-ink2); background: #fbfcfd; }
+.login-screen .sso-sep { font-family: var(--lg-mono); font-size: 10px; letter-spacing: .18em; color: var(--lg-ink2); text-transform: uppercase; margin-bottom: 12px; }
+.login-screen .local-heading { font-size: 17px; margin: 0 0 16px; }
+
+.login-screen .field { margin-bottom: 12px; }
+.login-screen .field label { display: block; font-family: var(--lg-mono); font-size: 10px; letter-spacing: .14em; color: var(--lg-ink2); text-transform: uppercase; margin-bottom: 6px; }
+.login-screen .field .field-error { display: block; margin-top: 4px; font-size: 12px; color: var(--lg-fail); }
+.login-screen .pwd-wrap { position: relative; display: block; }
+.login-screen .pwd-wrap input { padding-right: 40px; }
+.login-screen .pwd-eye { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; background: none; color: var(--lg-ink2); cursor: pointer; border-radius: 4px; }
+.login-screen .pwd-eye:hover { color: var(--lg-ink); }
+.login-screen .field input { width: 100%; font-family: inherit; font-size: 14px; padding: 10px 12px; border: 1px solid var(--lg-hair); border-radius: 8px; background: #fbfcfd; color: var(--lg-ink); outline: none; transition: border-color .16s, background .16s; }
+.login-screen .field input:focus { border-color: var(--lg-accent); background: var(--lg-onfill); }
+
+.login-screen .row { display: flex; align-items: center; margin: 4px 0 0; font-size: 12.5px; color: var(--lg-ink2); }
+.login-screen .row a { color: var(--lg-ink2); text-decoration: none; border-bottom: 1px solid rgba(var(--lg-ink2-rgb), .3); }
+.login-screen .row a:hover { color: var(--lg-accent); border-bottom-color: var(--lg-accent); }
+
+/* 主按钮:平面 accent,8px 圆角,无渐变无位移 */
+.login-screen .lg-btn { display: flex; align-items: center; justify-content: center; width: 100%; margin-top: 14px; border: 1px solid var(--lg-accent); border-radius: 8px; padding: 11px; font-size: 14px; font-weight: 600; line-height: 1; color: #fff; background: var(--lg-accent); appearance: none; -webkit-appearance: none; cursor: pointer; font-family: inherit; text-align: center; transition: background-color .16s; }
+.login-screen .lg-btn:hover { background: #2e91ef; }
+.login-screen .lg-btn:disabled { opacity: .55; cursor: default; }
+.login-screen .login-error { color: var(--lg-fail); font-size: 12px; line-height: 1.5; margin: 10px 0 0; }
+@keyframes lgBootFade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: no-preference) {
+  .login-screen .lv-value { animation: lgBootFade .4s ease both; animation-delay: .1s; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-screen .lvb-plane { transition: none; }
+}
+@media (max-width: 860px) { .login-screen .split { grid-template-columns: 1fr; width: min(440px, 94vw); min-height: 540px; } .login-screen .left { display: none; } }

@@ -1,0 +1,10 @@
+{
+  "hero": {
+    "statsProjects": "{{count}} projects",
+    "statsCurrent": "Current: {{name}}",
+    "statsNone": "No project selected"
+  },
+  "card": {
+    "enterHint": "Open this project's workspace"
+  }
+}

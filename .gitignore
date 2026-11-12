@@ -1,0 +1,34 @@
+# 本地运行产物(含凭据,严禁入库)
+runtime.env
+e2e_state.json
+runtime-data/
+runtime*.log
+nohup.out
+__pycache__/
+.pytest_cache/
+*.pyc
+.DS_Store
+# 平台构建产物
+platform/ainative/target/
+platform/ainative/logs/
+platform/ainative/frontend/node/
+platform/settings.xml
+platform/runtime.env
+
+# 多角色 daemon 凭据(含模型 token/平台 token),严禁入库
+runtime-dev.env
+runtime-reviewer.env
+
+# 运行产物目录(含 claude 工作区与凭据,严禁入库)
+runtime-data*/
+runtime-server.env
+runtime-server2.env
+runtime-data-server*/
+runtime-server110.env
+runtime-server110b.env
+
+# 本地闭环 E2E 凭据(含模型 token/平台 token),严禁入库
+runtime-local.env
+runtime-cr.env
+# 实录原始素材(体量大,成片 mp4 随库)
+docs/demo/realtake*/*.webm

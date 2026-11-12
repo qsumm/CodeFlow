@@ -1,0 +1,20 @@
+.cf-comment-reply { margin: 10px 0 0 12px; padding: 12px 14px; border-left: 3px solid var(--cf-accent-text); border-radius: 8px; background: rgba(var(--cf-accent-rgb),.10); color: var(--cf-text); font-size: 12px; min-width: 0; }
+.cf-comment-reply-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cf-comment-reply-header strong { color: var(--cf-accent-text); overflow-wrap: anywhere; }
+.cf-comment-robot { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: rgba(var(--cf-accent-rgb),.10); color: var(--cf-accent-text); font-size: 17px; flex-shrink: 0; }
+.cf-comment-state { margin-left: auto; background: rgba(var(--cf-accent-rgb),.10); color: var(--cf-accent-text); border-radius: 12px; padding: 2px 8px; white-space: nowrap; }
+.cf-comment-stage { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 10px 0; color: var(--cf-muted); }
+.cf-comment-log { height: 132px; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--cf-border); border-radius: 6px; background: var(--cf-panel); padding: 8px 10px; }
+.cf-comment-log--expanded { height: 280px; }
+.cf-comment-log-row { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; overflow-wrap: anywhere; }
+.cf-comment-log-row time { color: var(--cf-muted); font-size: 11px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.cf-comment-log-dot { color: var(--cf-accent-text); }
+.cf-comment-empty, .cf-comment-note { color: var(--cf-muted); padding: 6px 0; font-size: 11px; }
+.cf-comment-controls { display: flex; gap: 12px; }
+.cf-comment-controls button { border: 0; background: transparent; padding: 4px 0; color: var(--cf-accent-text); font-size: 12px; cursor: pointer; }
+.cf-comment-controls button:focus-visible { outline: 2px solid var(--cf-accent-text); outline-offset: 2px; }
+.cf-comment-answer { margin-top: 8px; overflow-wrap: anywhere; }
+.cf-comment-reply--failed .cf-comment-state { background: color-mix(in srgb, var(--cf-error) 10%, var(--cf-panel)); color: var(--cf-error); }
+.cf-comment-error { margin-top: 8px; color: var(--cf-error); overflow-wrap: anywhere; }
+.cf-comment-error pre { margin: 8px 0 0; padding: 10px; background: var(--cf-panel); border: 1px solid color-mix(in srgb, var(--cf-error) 35%, var(--cf-border)); border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; font-size: 11px; }
+.cf-comment-error p { margin: 6px 0; }

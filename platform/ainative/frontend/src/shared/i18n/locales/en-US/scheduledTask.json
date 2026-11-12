@@ -1,0 +1,283 @@
+{
+  "capability": {
+    "checking": "Checking availability…",
+    "databaseTitle": "System upgrade in progress",
+    "databaseDescription": "Scheduled tasks open automatically after the upgrade.",
+    "disabledTitle": "Not available",
+    "disabledDescription": "Scheduled tasks are off in this environment — ask the admin.",
+    "clusterTitle": "Cluster preparing",
+    "clusterDescription": "Opens automatically once all services are ready.",
+    "unavailableTitle": "Scheduled tasks unavailable",
+    "unavailableDescription": "Refresh and retry later.",
+    "errorTitle": "Cannot confirm availability",
+    "errorDescription": "Kept closed for data safety — refresh later."
+  },
+  "taskStatus": {
+    "active": "Active",
+    "paused": "Paused",
+    "exhausted": "Finished",
+    "archived": "Archived"
+  },
+  "columns": {
+    "name": "Name",
+    "status": "Status",
+    "nextExecution": "Next run",
+    "latestResult": "Last result",
+    "actions": "Actions",
+    "run": "Run",
+    "trigger": "Trigger",
+    "scheduledAt": "Scheduled",
+    "finishedAt": "Finished",
+    "workitem": "Work item",
+    "phase": "Phase",
+    "workitemStatus": "Work item status",
+    "plannedAt": "Planned"
+  },
+  "labels": {
+    "agent": "Agent",
+    "agentId": "Agent #{{id}}",
+    "squadId": "Squad #{{id}}",
+    "runId": "Run #{{id}}"
+  },
+  "list": {
+    "awaitingResult": "Running / awaiting",
+    "tasksTitle": "Scheduled tasks",
+    "workitemsTitle": "Scheduled work items",
+    "summaryAria": "Summary",
+    "summaryScope": "Current filters (all creators)",
+    "scopeAria": "Scope",
+    "keywordAria": "Keyword",
+    "searchPlaceholder": "Search tasks",
+    "squadFilter": "Squad filter",
+    "statusFilter": "By status",
+    "successRate": "30-day success <rate>{{rate}}</rate>% (<success>{{success}}</success>/<completed>{{completed}}</completed>)",
+    "totalTasks_one": "<number>{{total}}</number> task",
+    "totalTasks_other": "<number>{{total}}</number> tasks",
+    "totalWorkitems_one": "<number>{{total}}</number> work item",
+    "totalWorkitems_other": "<number>{{total}}</number> work items",
+    "totalRows_one": "{{total}} record",
+    "totalRows_other": "{{total}} rows",
+    "runningCount_one": "<number>{{total}}</number> running task",
+    "runningCount_other": "Running <number>{{total}}</number>",
+    "todayCount_one": "<number>{{total}}</number> run today",
+    "todayCount_other": "Today <number>{{total}}</number>",
+    "attentionCount_one": "<number>{{total}}</number> task needs attention",
+    "attentionCount_other": "Needs attention <number>{{total}}</number>",
+    "statTotal": "Total tasks",
+    "statRunning": "Running",
+    "statToday": "Runs today",
+    "statRate": "30-day success rate",
+    "statAttention": "Needs attention"
+  },
+  "confirm": {
+    "runNow": "Run once now?",
+    "deleteTask": "No more scheduling after deletion; cannot be undone",
+    "createRun": "Creates a standalone Run. Pausing blocks future triggers only — running Runs continue.",
+    "forceCancel": "Force-cancel this run?",
+    "forceCancelDescription": "The executor may be offline. Force cancel ends this run immediately and cannot be undone.",
+    "deleteArtifact": "Cannot be undone; re-upload the same name to replace"
+  },
+  "actions": {
+    "runNow": "Run now",
+    "cancel": "Cancel",
+    "confirmDelete": "Confirm delete",
+    "delete": "Delete",
+    "newTask": "New task",
+    "backToList": "Back to tasks",
+    "createEnable": "Create & enable",
+    "savePaused": "Save paused",
+    "backToDetail": "Back to detail",
+    "save": "Save",
+    "backToTasks": "Back to tasks",
+    "edit": "Edit",
+    "pauseFuture": "Pause future triggers",
+    "enable": "Enable",
+    "createRun": "Create run",
+    "back": "Back",
+    "pause": "Pause",
+    "resume": "Resume",
+    "forceCancel": "Force cancel",
+    "confirmForceCancel": "Confirm force cancel",
+    "reconsider": "Never mind",
+    "view": "View",
+    "preview": "Preview",
+    "search": "Search",
+    "clearTaskSearch": "Clear search",
+    "clearWorkitemSearch": "Clear scheduled work item search",
+    "refresh": "Refresh"
+  },
+  "commands": {
+    "runNow": "Run now",
+    "deleteTask": "Delete task",
+    "createTask": "Create task",
+    "enableFuture": "Enable future triggers",
+    "deleteDocument": "Delete attachment"
+  },
+  "create": {
+    "title": "New scheduled task",
+    "noWorkflow": "no Pipeline workflow (uses scheduling instructions directly)",
+    "agentWorkflow": "{{agent}} runs {{workflow}}",
+    "uploadFailed": "Saved paused; document upload failed — retry from the detail page before enabling.",
+    "uploadFailedReason": "Saved paused; upload failed: {{reason}}. Retry from the detail page.",
+    "enableFailed": "Document uploaded but enabling failed; task stays paused.",
+    "enableFailedReason": "Document uploaded but enabling failed: {{reason}}; task stays paused.",
+    "enabled": "Task created and enabled",
+    "paused": "Task saved as paused"
+  },
+  "scope": {
+    "all": "All",
+    "created": "Created by me"
+  },
+  "form": {
+    "name": "Task name",
+    "namePlaceholder": "e.g. Nightly regression",
+    "instruction": "Instructions",
+    "instructionPlaceholder": "Markdown. Goal, inputs, done criteria, caveats.",
+    "squad": "Squad",
+    "squadPlaceholder": "Select an execution squad",
+    "initialAgent": "Initial Agent",
+    "agentPlaceholder": "Select the initial Agent from this squad",
+    "timezone": "Time zone",
+    "policySection": "Run policy & sessions",
+    "documents": "Requirement documents",
+    "documentsHelp": "Uploaded on creation; frozen per run.",
+    "documentsAria": "Document upload area (click, drag or paste)",
+    "documentsPrompt": "Click or drag to upload; Ctrl/Cmd+V for screenshots",
+    "cron": "Cron expression",
+    "sessionMode": "Session mode",
+    "overlap": "Overlap policy",
+    "misfire": "Misfire policy",
+    "overlapExecution": "Overlap execution",
+    "missedTrigger": "Missed triggers",
+    "startDeadline": "Start timeout (s)",
+    "affinityTimeout": "Session affinity timeout (s)"
+  },
+  "validation": {
+    "nameRequired": "Name is required",
+    "instructionRequired": "Describe the work the Agent should complete periodically",
+    "squadRequired": "Select a squad",
+    "agentRequired": "Select an initial Agent",
+    "cron": "Enter a valid six-field cron",
+    "runDate": "Pick the one-off date",
+    "runTime": "Pick the one-off time",
+    "required": "Pick {{field}}",
+    "numberRequired": "Enter {{field}}"
+  },
+  "edit": {
+    "title": "Edit scheduled task"
+  },
+  "session": {
+    "isolated": "Isolated",
+    "continuous": "Continuous",
+    "isolatedRecommended": "Isolated (recommended)"
+  },
+  "detail": {
+    "invalidId": "Invalid task ID",
+    "loadFailed": "Task missing or failed to load",
+    "initialAgent": "Initial Agent",
+    "schedule": "Schedule",
+    "sessionOverlap": "Sessions / concurrency",
+    "health": "30-day health",
+    "instruction": "Instructions",
+    "history": "Run history",
+    "noCompletedRuns": "No completed runs yet",
+    "nextExecution": "Next: {{time}}",
+    "healthResult": "{{success}}/{{completed}} succeeded ({{rate}}%)"
+  },
+  "run": {
+    "invalidId": "Invalid run ID",
+    "loadFailed": "Run failed to load",
+    "summary": "Run summary",
+    "startedAt": "Started at",
+    "finishedAt": "Finished at",
+    "executor": "Executor",
+    "resumedFrom": "Resumed from",
+    "result": "Result",
+    "triggerSchedule": "Trigger: {{trigger}} · scheduled: {{time}}",
+    "duration": " · took: {{duration}}"
+  },
+  "comment": {
+    "label": "Comment on this run",
+    "notFrozen": "Not in this run's frozen snapshot; @ won't trigger",
+    "human": "Human",
+    "offline": "(offline, delivered later)",
+    "placeholder": "Comment on this run; @ to mention…",
+    "send": "Send",
+    "disabledReason": "({{reason}})"
+  },
+  "workitems": {
+    "doneReason": "The work item is complete; its schedule cannot be changed",
+    "triggeredReason": "Already triggered — no longer editable",
+    "editTime": "Modified",
+    "executeNow": "Start now",
+    "scopeAria": "Scheduled work item scope",
+    "keywordAria": "Work item title filter",
+    "searchPlaceholder": "Search work item titles",
+    "actionAria": "{{action}} #{{id}}"
+  },
+  "phase": {
+    "pending": "Pending",
+    "ready": "Ready",
+    "running": "Running",
+    "done": "Done"
+  },
+  "schedule": {
+    "type": "Schedule",
+    "recurring": "Recurring",
+    "once": "One-off",
+    "frequency": "Frequency",
+    "hourly": "Hourly",
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "custom": "Custom",
+    "cronPlaceholder": "sec min hour day month weekday, e.g. 0 0 2 * * *",
+    "previewHelp": "Next five runs computed server-side.",
+    "previewAria": "Upcoming runs",
+    "previewLoading": "Computing…",
+    "runDate": "Run date",
+    "runTime": "Run time"
+  },
+  "overlap": {
+    "skip": "Skip this one",
+    "queue": "Queue",
+    "allow": "Allow parallel"
+  },
+  "misfire": {
+    "skipAll": "Skip all",
+    "fireLatest": "Run the latest",
+    "fireAll": "Run all"
+  },
+  "runStatus": {
+    "succeeded": "Succeeded",
+    "failed": "Failed",
+    "skipped": "Skipped",
+    "running": "Running",
+    "canceled": "Canceled",
+    "queued": "Queued",
+    "starting": "Starting",
+    "waitingExecutor": "Waiting for executor",
+    "waitingHuman": "Waiting on human",
+    "paused": "Paused",
+    "timedOut": "Timed out"
+  },
+  "derived": {
+    "title": "Derived work items",
+    "empty": "No derived work items"
+  },
+  "artifacts": {
+    "title": "Run artifacts",
+    "empty": "No artifacts"
+  },
+  "messages": {
+    "runCreated": "Run created",
+    "taskDeleted": "Task deleted",
+    "documentsUploaded": "Documents uploaded",
+    "documentDeleted": "Attachment deleted"
+  },
+  "trigger": {
+    "scheduled": "Scheduled",
+    "manual": "Manual",
+    "misfire": "Misfire"
+  }
+}

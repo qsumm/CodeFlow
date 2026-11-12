@@ -1,0 +1,277 @@
+{
+  "capability": {
+    "checking": "确认功能可用性…",
+    "databaseTitle": "系统升级准备中",
+    "databaseDescription": "升级完成后定时任务自动开放,稍后再来。",
+    "disabledTitle": "功能未开放",
+    "disabledDescription": "当前环境没开定时任务,找管理员。",
+    "clusterTitle": "集群准备中",
+    "clusterDescription": "等服务全部就绪后自动开放。",
+    "unavailableTitle": "定时任务暂时不可用",
+    "unavailableDescription": "稍后刷新重试。",
+    "errorTitle": "功能状态确认不了",
+    "errorDescription": "为保数据安全暂不开放,稍后刷新重试。"
+  },
+  "taskStatus": {
+    "active": "启用中",
+    "paused": "已暂停",
+    "exhausted": "已跑完",
+    "archived": "已归档"
+  },
+  "columns": {
+    "name": "名称",
+    "status": "状态",
+    "nextExecution": "下次运行",
+    "latestResult": "最近结果",
+    "actions": "操作",
+    "run": "运行",
+    "trigger": "触发方式",
+    "scheduledAt": "调度时刻",
+    "finishedAt": "结束时刻",
+    "workitem": "工作项",
+    "phase": "所在阶段",
+    "workitemStatus": "工作项状态",
+    "plannedAt": "计划时刻"
+  },
+  "labels": {
+    "agent": "AI 成员",
+    "agentId": "AI 成员 #{{id}}",
+    "squadId": "编队 #{{id}}",
+    "runId": "Run #{{id}}"
+  },
+  "list": {
+    "awaitingResult": "在跑/待回传",
+    "tasksTitle": "定时任务",
+    "workitemsTitle": "定时工作项",
+    "summaryAria": "汇总",
+    "summaryScope": "按当前条件(含全部创建人)",
+    "scopeAria": "范围",
+    "keywordAria": "关键词",
+    "searchPlaceholder": "搜任务名",
+    "squadFilter": "编队筛选",
+    "statusFilter": "按状态",
+    "successRate": "30 天成功率 <rate>{{rate}}</rate>%(<success>{{success}}</success>/<completed>{{completed}}</completed>)",
+    "totalTasks_other": "共 <number>{{total}}</number> 个任务",
+    "totalWorkitems_other": "共 <number>{{total}}</number> 个工作项",
+    "totalRows_other": "共 {{total}} 条",
+    "runningCount_other": "在跑 <number>{{total}}</number>",
+    "todayCount_other": "今日 <number>{{total}}</number> 次",
+    "attentionCount_other": "待关注 <number>{{total}}</number>",
+    "statTotal": "任务总数",
+    "statRunning": "进行中",
+    "statToday": "今日执行",
+    "statRate": "30 天成功率",
+    "statAttention": "待关注"
+  },
+  "confirm": {
+    "runNow": "马上跑一次?",
+    "deleteTask": "删了就不再调度,不可恢复",
+    "createRun": "会生成一条独立 Run;暂停任务只挡未来触发,不影响在跑的 Run。",
+    "forceCancel": "强制取消本次运行?",
+    "forceCancelDescription": "运行器可能已离线，强制取消将直接终结本轮运行且不可恢复。",
+    "deleteArtifact": "删了不可恢复;同名文件可重传"
+  },
+  "actions": {
+    "runNow": "立即跑",
+    "cancel": "取消",
+    "confirmDelete": "确认删除",
+    "delete": "删除",
+    "newTask": "新建任务",
+    "backToList": "回任务列表",
+    "createEnable": "建好并启用",
+    "savePaused": "存为暂停",
+    "backToDetail": "回详情",
+    "save": "保存",
+    "backToTasks": "回任务列表",
+    "edit": "编辑",
+    "pauseFuture": "暂停未来触发",
+    "enable": "启用",
+    "createRun": "建运行实例",
+    "back": "返回",
+    "pause": "暂停",
+    "resume": "恢复",
+    "forceCancel": "强制取消",
+    "confirmForceCancel": "确认强制取消",
+    "reconsider": "再想想",
+    "view": "查看",
+    "preview": "预览",
+    "search": "搜索",
+    "clearTaskSearch": "清空搜索",
+    "clearWorkitemSearch": "清空定时工作项搜索",
+    "refresh": "刷新"
+  },
+  "commands": {
+    "runNow": "立即运行",
+    "deleteTask": "删除任务",
+    "createTask": "创建任务",
+    "enableFuture": "启用未来触发",
+    "deleteDocument": "删除附件"
+  },
+  "create": {
+    "title": "新建定时任务",
+    "noWorkflow": "未绑定 流水线（直接接受调度指令）",
+    "agentWorkflow": "{{agent}} 按 {{workflow}} 执行",
+    "uploadFailed": "任务已存为暂停;文档上传失败,去详情重传后再启用。",
+    "uploadFailedReason": "任务已存为暂停;文档上传失败:{{reason}}。去详情重传后再启用。",
+    "enableFailed": "文档已传,但启用失败;任务仍是暂停,去详情重试。",
+    "enableFailedReason": "文档已传,但启用失败:{{reason}};任务仍是暂停,去详情重试。",
+    "enabled": "任务已建好并启用",
+    "paused": "任务已存为暂停"
+  },
+  "scope": {
+    "all": "全部",
+    "created": "我创建的"
+  },
+  "form": {
+    "name": "任务名",
+    "namePlaceholder": "如:主干夜间回归",
+    "instruction": "任务指令",
+    "instructionPlaceholder": "Markdown。写清目标、输入、完成标准和注意事项。",
+    "squad": "编队",
+    "squadPlaceholder": "选择执行编队",
+    "initialAgent": "首个AI 成员",
+    "agentPlaceholder": "选择该编队中的首个AI 成员",
+    "timezone": "时区",
+    "policySection": "运行策略与会话",
+    "documents": "需求文档",
+    "documentsHelp": "任务建好后自动上传,每次运行冻结一份。",
+    "documentsAria": "需求文档上传区(点击/拖拽/粘贴)",
+    "documentsPrompt": "点选或拖拽上传,也可 Ctrl/Cmd+V 贴截图",
+    "cron": "Cron 表达式",
+    "sessionMode": "会话模式",
+    "overlap": "重叠策略",
+    "misfire": "补偿策略",
+    "overlapExecution": "重叠执行",
+    "missedTrigger": "错过触发",
+    "startDeadline": "启动超时(秒)",
+    "affinityTimeout": "连续会话亲和超时(秒)"
+  },
+  "validation": {
+    "nameRequired": "任务名必填",
+    "instructionRequired": "请描述希望AI 成员周期完成的工作",
+    "squadRequired": "请选择编队",
+    "agentRequired": "请选择首个AI 成员",
+    "cron": "Cron 须是合法六段表达式",
+    "runDate": "选单次执行日期",
+    "runTime": "选单次执行时间",
+    "required": "选{{field}}",
+    "numberRequired": "填{{field}}"
+  },
+  "edit": {
+    "title": "编辑定时任务"
+  },
+  "session": {
+    "isolated": "隔离会话",
+    "continuous": "连续会话",
+    "isolatedRecommended": "单次隔离(推荐)"
+  },
+  "detail": {
+    "invalidId": "任务 ID 不对",
+    "loadFailed": "任务不存在或没读到",
+    "initialAgent": "初始AI 成员",
+    "schedule": "调度",
+    "sessionOverlap": "会话 / 并发",
+    "health": "30 天健康度",
+    "instruction": "任务说明",
+    "history": "运行史",
+    "noCompletedRuns": "还没有跑完的记录",
+    "nextExecution": "下次:{{time}}",
+    "healthResult": "成功 {{success}}/{{completed}}({{rate}}%)"
+  },
+  "run": {
+    "invalidId": "运行 ID 不对",
+    "loadFailed": "运行没读到",
+    "summary": "运行摘要",
+    "startedAt": "开始",
+    "finishedAt": "结束",
+    "executor": "运行器",
+    "resumedFrom": "恢复自",
+    "result": "执行结果",
+    "triggerSchedule": "触发:{{trigger}} · 调度:{{time}}",
+    "duration": " · 用时:{{duration}}"
+  },
+  "comment": {
+    "label": "点评本次运行",
+    "notFrozen": "不在本次运行的冻结快照里,@ 不生效",
+    "human": "真人",
+    "offline": "(离线,稍后送达)",
+    "placeholder": "点评本次运行,@ 选成员…",
+    "send": "发送",
+    "disabledReason": "({{reason}})"
+  },
+  "workitems": {
+    "doneReason": "工作项已完成，无法再调整定时",
+    "triggeredReason": "定时已触发,改不了了",
+    "editTime": "修改时间",
+    "executeNow": "立即启动",
+    "scopeAria": "定时工作项范围",
+    "keywordAria": "工作项标题筛选",
+    "searchPlaceholder": "搜索工作项标题",
+    "actionAria": "{{action}} #{{id}}"
+  },
+  "phase": {
+    "pending": "待触发",
+    "ready": "待处理",
+    "running": "在跑",
+    "done": "已完成"
+  },
+  "schedule": {
+    "type": "调度方式",
+    "recurring": "周期",
+    "once": "单次",
+    "frequency": "频率",
+    "hourly": "每小时",
+    "daily": "每天",
+    "weekly": "每周",
+    "monthly": "每月",
+    "custom": "自定义",
+    "cronPlaceholder": "秒 分 时 日 月 星期,如 0 0 2 * * *",
+    "previewHelp": "下面是服务端算出的未来五次执行。",
+    "previewAria": "未来执行时刻",
+    "previewLoading": "正在算…",
+    "runDate": "执行日期",
+    "runTime": "执行时刻"
+  },
+  "overlap": {
+    "skip": "跳过本次",
+    "queue": "排队等候",
+    "allow": "允许并行"
+  },
+  "misfire": {
+    "skipAll": "全跳过",
+    "fireLatest": "补跑最近一次",
+    "fireAll": "全部补跑"
+  },
+  "runStatus": {
+    "succeeded": "成功",
+    "failed": "失败",
+    "skipped": "跳过",
+    "running": "运行中",
+    "canceled": "已取消",
+    "queued": "排队中",
+    "starting": "启动中",
+    "waitingExecutor": "等待运行器",
+    "waitingHuman": "等人处理",
+    "paused": "已暂停",
+    "timedOut": "超时"
+  },
+  "derived": {
+    "title": "派生工作项",
+    "empty": "暂无派生工作项"
+  },
+  "artifacts": {
+    "title": "运行产物",
+    "empty": "没有产物"
+  },
+  "messages": {
+    "runCreated": "运行实例已建",
+    "taskDeleted": "任务已删",
+    "documentsUploaded": "文档已上传",
+    "documentDeleted": "附件已删"
+  },
+  "trigger": {
+    "scheduled": "定时",
+    "manual": "手动",
+    "misfire": "补偿"
+  }
+}

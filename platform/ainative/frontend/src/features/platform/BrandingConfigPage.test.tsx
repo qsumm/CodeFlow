@@ -1,0 +1,989 @@
+import { i18n } from '@/shared/i18n';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { act, render, screen, waitFor, within, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { message } from 'antd';
+import { MemoryRouter, useLocation } from 'react-router-dom';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { http, HttpResponse } from 'msw';
+import { server } from '@/test/mocks/server';
+import { BrandingConfigPage } from './BrandingConfigPage';
+import type { UpdateDingTalkImChannelParams } from './brandingApi';
+import * as brandingApi from './brandingApi';
+import { AppearanceProvider } from '@/shared/theme/AppearanceProvider';
+import { useAuthStore } from '@/shared/auth/store';
+
+function brandingPayload() {
+  return {
+    success: true,
+    code: '0',
+    message: '',
+    traceId: null,
+    data: {
+      platformName: 'CodeFlow',
+      logoUrl: '/logo.png',
+      themeKey: 'rose',
+      primaryColor: '#e11d48',
+      domain: 'https://community.example',
+      mcpBaseUrl: 'https://community.example/api/mcp',
+      canManage: true,
+    },
+  };
+}
+
+function imChannelsPayload() {
+  return {
+    success: true,
+    code: '0',
+    message: '',
+    traceId: null,
+    data: [
+      {
+        provider: 'DINGTALK',
+        enabled: true,
+        appKey: 'ding-app',
+        robotCode: 'ding-robot',
+        secretConfigured: true,
+        ready: true,
+      },
+    ],
+  };
+}
+
+function imSelectionPayload(provider = 'DINGTALK', generation = 1) {
+  return {
+    success: true,
+    code: '0',
+    message: '',
+    traceId: null,
+    data: { provider, generation, activatedAt: null },
+  };
+}
+
+function groupChatPayload(provider: string) {
+  return {
+    success: true,
+    code: '0',
+    message: '',
+    traceId: null,
+    data: {
+      provider,
+      configured: false,
+      ready: false,
+      desiredEnabled: false,
+      selected: provider === 'DINGTALK',
+      appKey: null,
+      robotCode: null,
+      secretConfigured: false,
+      verificationTokenConfigured: false,
+      encryptKeyConfigured: false,
+      version: null,
+      routeVersion: 1,
+      selectionGeneration: 1,
+      status: 'DISABLED',
+      drainingCount: 0,
+      failedCount: 0,
+      unknownCount: 0,
+    },
+  };
+}
+
+function renderPage() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/workspaces/branding']}>
+        <BrandingConfigPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+function LocationProbe() {
+  const location = useLocation();
+  return <span data-testid="location-path">{location.pathname}</span>;
+}
+
+function renderPageWithLocation() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/workspaces/branding']}>
+        <BrandingConfigPage />
+        <LocationProbe />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+/** antd Tabs mounts a pane only once its tab has been activated. */
+async function openNotificationTab() {
+  await userEvent.click(await screen.findByRole('tab', { name: '消息渠道' }));
+}
+
+async function openPlatformAdminTab() {
+  await userEvent.click(await screen.findByRole('tab', { name: '平台管理员' }));
+}
+
+async function openEnterpriseSsoTab() {
+  await userEvent.click(await screen.findByRole('tab', { name: '企业 SSO' }));
+}
+
+async function openUserManagementTab() {
+  await userEvent.click(await screen.findByRole('tab', { name: '用户管理' }));
+}
+
+describe('BrandingConfigPage', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+    // antd's static message() portals its notices into document.body and auto-closes them after 3s.
+    // A notice opened by an earlier test is therefore removed by React *after* the body wipe above
+    // has already detached it, which throws "The node to be removed is not a child of this node".
+    // Nothing here asserts on a rendered toast, so keeping the real holder out of the DOM removes
+    // the race instead of papering over it with timing.
+    vi.spyOn(message, 'success').mockImplementation(
+      () => undefined as unknown as ReturnType<typeof message.success>,
+    );
+    vi.spyOn(message, 'error').mockImplementation(
+      () => undefined as unknown as ReturnType<typeof message.error>,
+    );
+    useAuthStore.getState().clear();
+    window.localStorage.clear();
+    useAuthStore.getState().setCurrentWorkspace({ id: 1, name: 'O', description: '' }, 'ADMIN');
+    server.use(
+      http.get('/api/platform/branding', () => HttpResponse.json(brandingPayload())),
+      http.get('/api/platform/im-channels', () => HttpResponse.json(imChannelsPayload())),
+      http.get('/api/platform/im-channels/selection', () => HttpResponse.json(imSelectionPayload())),
+      http.get('/api/platform/im-channels/DINGTALK/group-chat', () => HttpResponse.json(groupChatPayload('DINGTALK'))),
+      http.get('/api/platform/im-channels/FEISHU/group-chat', () => HttpResponse.json(groupChatPayload('FEISHU'))),
+    );
+  });
+
+  it('rejects logos above 512 KB and accepts the exact limit', async () => {
+    const upload = vi.spyOn(brandingApi, 'uploadBrandingLogo').mockResolvedValue({ logoUrl: '/api/platform/branding/logo?v=2' });
+    const { container } = renderPage();
+    await screen.findByText('上传 Logo');
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await waitFor(() => expect(input).not.toBeDisabled());
+    await userEvent.upload(input, new File([new Uint8Array(512 * 1024 + 1)], 'large.png', { type: 'image/png' }));
+    await waitFor(() => expect(message.error).toHaveBeenCalledWith('Logo 文件不能超过 512 KB'));
+    expect(upload).not.toHaveBeenCalled();
+    const nextInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await userEvent.upload(nextInput, new File([new Uint8Array(512 * 1024)], 'logo.png', { type: 'image/png' }));
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(1));
+  });
+
+  it('uploads each supported logo format through the file picker', async () => {
+    const upload = vi.spyOn(brandingApi, 'uploadBrandingLogo').mockResolvedValue({ logoUrl: '/api/platform/branding/logo?v=2' });
+    const { container } = renderPage();
+    await screen.findByText('上传 Logo');
+    const files = [
+      ['png', 'image/png'], ['jpg', 'image/jpeg'], ['jpeg', 'image/jpeg'],
+      ['webp', 'image/webp'], ['svg', 'image/svg+xml'], ['gif', 'image/gif'],
+      ['ico', 'image/x-icon'], ['ico', 'image/vnd.microsoft.icon'], ['avif', 'image/avif'],
+    ];
+    for (const [ext, type] of files) {
+      const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+      await waitFor(() => expect(input).not.toBeDisabled());
+      const count = upload.mock.calls.length;
+      await userEvent.upload(input, new File(['logo'], `logo.${ext}`, { type }));
+      await waitFor(() => expect(upload).toHaveBeenCalledTimes(count + 1));
+      expect(upload.mock.calls[count][0]).toMatchObject({ name: `logo.${ext}`, type });
+      await waitFor(() => {
+        expect(screen.getByRole('img', { name: 'CodeFlow' })).toHaveAttribute('src', '/api/platform/branding/logo?v=2');
+        expect(screen.getByRole('link', { name: /CodeFlow，返回项目列表/ }).querySelector('img'))
+          .toHaveAttribute('src', '/api/platform/branding/logo?v=2');
+      });
+    }
+  });
+
+  it('applies saved preset and custom colors to the current theme without rereading stale config', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    const initial = { ...brandingApi.DEFAULT_BRANDING, ...brandingPayload().data };
+    queryClient.setQueryData(brandingApi.BRANDING_QUERY_KEY, { ...initial, canManage: false });
+    server.use(
+      // A subsequent GET may still read the old configuration.
+      http.get('/api/platform/branding/public', () => HttpResponse.json(brandingPayload())),
+      http.put('/api/platform/branding', async ({ request }) => HttpResponse.json({
+        ...brandingPayload(),
+        data: { ...initial, ...await request.json() as object },
+      })),
+    );
+    function ThemedPage() {
+      const { data = initial } = useQuery({
+        queryKey: brandingApi.BRANDING_QUERY_KEY,
+        queryFn: brandingApi.getPublicBranding,
+      });
+      return <AppearanceProvider accent={data.primaryColor}><BrandingConfigPage /></AppearanceProvider>;
+    }
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter><ThemedPage /></MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const save = await screen.findByRole('button', { name: /保存配置/ });
+    await waitFor(() => expect(save).toBeEnabled());
+    await userEvent.click(screen.getByText('海洋蓝'));
+    expect(document.documentElement.style.getPropertyValue('--cf-accent')).toBe('#e11d48');
+    await userEvent.click(save);
+    await waitFor(() => {
+      expect(document.documentElement.style.getPropertyValue('--cf-accent')).toBe('#2563eb');
+      expect(save).toBeEnabled();
+    });
+    fireEvent.change(screen.getByLabelText('选择主色'), { target: { value: '#123456' } });
+    await userEvent.click(save);
+    await waitFor(() => {
+      expect(document.documentElement.style.getPropertyValue('--cf-accent')).toBe('#123456');
+      expect(queryClient.getQueryData(brandingApi.BRANDING_ADMIN_QUERY_KEY)).toMatchObject({ primaryColor: '#123456' });
+      expect(queryClient.getQueryData(brandingApi.BRANDING_QUERY_KEY)).toMatchObject({ primaryColor: '#123456', canManage: false });
+    });
+  });
+
+  it('loads existing branding and saves updates', async () => {
+    let savedBody: Record<string, unknown> | null = null;
+    server.use(
+      http.get('/api/platform/branding', () => HttpResponse.json(brandingPayload())),
+      http.put('/api/platform/branding', async ({ request }) => {
+        savedBody = await request.json() as Record<string, unknown>;
+        return HttpResponse.json({
+          success: true,
+          code: '0',
+          message: '',
+          traceId: null,
+          data: {
+            ...(savedBody as Record<string, unknown>),
+            logoUrl: '/logo.png',
+            canManage: true,
+          },
+        });
+      }),
+    );
+
+    renderPage();
+
+    const nameInput = await screen.findByPlaceholderText('CodeFlow');
+    await waitFor(() => expect(nameInput).not.toBeDisabled());
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, 'WonderHub');
+    const domainInput = screen.getByPlaceholderText('https://wonder.example.com');
+    await userEvent.clear(domainInput);
+    await userEvent.type(domainInput, 'https://wonder.example.com');
+    await userEvent.click(screen.getByText('海洋蓝'));
+    await userEvent.click(screen.getByRole('button', { name: /保存配置/ }));
+
+    await waitFor(() => {
+      expect(savedBody).toMatchObject({
+        platformName: 'WonderHub',
+        themeKey: 'ocean-blue',
+        primaryColor: '#2563eb',
+        domain: 'https://wonder.example.com',
+      });
+    });
+  });
+
+  it('explains that the saved domain drives the outbound platform addresses', async () => {
+    renderPage();
+
+    expect(await screen.findByText(
+      '仅平台管理员可以修改平台配置。保存「部署域名」后，MCP 服务地址、运行器启动命令等对外地址会立即使用该域名；未配置时使用部署环境变量地址。',
+    )).toBeInTheDocument();
+    expect(screen.getByText(
+      '填写私有化部署后用户访问平台的域名，例如 https://wonder.example.com；保存后 MCP 服务地址、运行器启动命令等对外地址立即使用该域名',
+    )).toBeInTheDocument();
+  });
+
+  it('loads dingtalk collaboration robot status', async () => {
+    renderPage();
+
+    expect(await screen.findByRole('tab', { name: '消息渠道' })).toBeInTheDocument();
+    await openNotificationTab();
+
+    expect(await screen.findByText('通知机器人')).toBeInTheDocument();
+    expect(await screen.findByText('AppSecret 已配置')).toBeInTheDocument();
+    expect(screen.getByText('配置完整')).toBeInTheDocument();
+    // The notification form is namespaced so its AppKey cannot collide with the group-chat form.
+    expect(await screen.findByLabelText('AppKey')).toHaveAttribute('id', 'imNotification_appKey');
+  });
+
+  it('uses backend dingtalk ready state even when credentials are present', async () => {
+    server.use(
+      http.get('/api/platform/im-channels', () => HttpResponse.json({
+        ...imChannelsPayload(),
+        data: [
+          {
+            provider: 'DINGTALK',
+            enabled: false,
+            appKey: 'ding-app',
+            robotCode: 'ding-robot',
+            secretConfigured: true,
+            ready: false,
+          },
+        ],
+      })),
+    );
+
+    renderPage();
+    await openNotificationTab();
+
+    expect(await screen.findByText('AppSecret 已配置')).toBeInTheDocument();
+    expect(screen.getByText('配置未完整')).toBeInTheDocument();
+    expect(screen.queryByText('配置完整')).not.toBeInTheDocument();
+  });
+
+  it('preserves configured app secret when saving dingtalk robot without a new secret', async () => {
+    let savedBody: Record<string, unknown> | null = null;
+    server.use(
+      http.put('/api/platform/im-channels/dingtalk', async ({ request }) => {
+        savedBody = await request.json() as Record<string, unknown>;
+        return HttpResponse.json({ ...imChannelsPayload(), data: imChannelsPayload().data[0] });
+      }),
+    );
+
+    renderPage();
+    await openNotificationTab();
+
+    const appKeyInput = await screen.findByLabelText('AppKey');
+    await waitFor(() => expect(appKeyInput).not.toBeDisabled());
+    const appSecretInput = screen.getByLabelText('AppSecret');
+    expect(appSecretInput).toHaveValue('');
+
+    await userEvent.clear(appKeyInput);
+    await userEvent.type(appKeyInput, 'ding-app-updated');
+    await userEvent.click(screen.getByRole('button', { name: /保存通知配置/ }));
+
+    await waitFor(() => {
+      expect(savedBody).toEqual({
+        enabled: true,
+        appKey: 'ding-app-updated',
+        appSecret: '',
+        robotCode: 'ding-robot',
+      });
+    });
+  });
+
+  it('can save disabled dingtalk robot with empty app secret', async () => {
+    let savedBody: Record<string, unknown> | null = null;
+    server.use(
+      http.put('/api/platform/im-channels/dingtalk', async ({ request }) => {
+        savedBody = await request.json() as Record<string, unknown>;
+        return HttpResponse.json({ ...imChannelsPayload(), data: { ...imChannelsPayload().data[0], enabled: false } });
+      }),
+    );
+
+    renderPage();
+    await openNotificationTab();
+
+    const enabledSwitch = await screen.findByRole('switch', { name: '开启 钉钉 机器人' });
+    await userEvent.click(enabledSwitch);
+    await userEvent.click(screen.getByRole('button', { name: /保存通知配置/ }));
+
+    await waitFor(() => {
+      expect(savedBody).toMatchObject({
+        enabled: false,
+        appKey: 'ding-app',
+        appSecret: '',
+        robotCode: 'ding-robot',
+      });
+    });
+  });
+
+  it('does not send app secret when saving main branding config', async () => {
+    let savedBrandingBody: Record<string, unknown> | null = null;
+    let savedDingTalkBody: Record<string, unknown> | null = null;
+    server.use(
+      http.get('/api/platform/branding', () => HttpResponse.json(brandingPayload())),
+      http.put('/api/platform/branding', async ({ request }) => {
+        savedBrandingBody = await request.json() as Record<string, unknown>;
+        return HttpResponse.json({
+          ...brandingPayload(),
+          data: {
+            ...brandingPayload().data,
+            ...(savedBrandingBody as Record<string, unknown>),
+          },
+        });
+      }),
+      http.put('/api/platform/im-channels/dingtalk', async ({ request }) => {
+        savedDingTalkBody = await request.json() as Record<string, unknown>;
+        return HttpResponse.json({ ...imChannelsPayload(), data: imChannelsPayload().data[0] });
+      }),
+    );
+
+    renderPage();
+
+    await screen.findByText('AppSecret 已配置');
+    await userEvent.click(screen.getByRole('button', { name: /保存配置/ }));
+
+    await waitFor(() => {
+      expect(savedBrandingBody).not.toBeNull();
+    });
+    expect(savedBrandingBody).not.toHaveProperty('appSecret');
+    expect(savedDingTalkBody).toBeNull();
+  });
+
+  it('keeps branding controls visible and shows backend permission errors', async () => {
+    let updateCalls = 0;
+    const error = vi.spyOn(message, 'error').mockImplementation(
+      () => undefined as unknown as ReturnType<typeof message.error>,
+    );
+    useAuthStore.getState().setCurrentWorkspace({ id: 1, name: 'O', description: '' }, 'READ_WRITE');
+    server.use(
+      http.get('/api/platform/branding', () => HttpResponse.json(brandingPayload())),
+      http.put('/api/platform/branding', () => {
+        updateCalls += 1;
+        return HttpResponse.json({
+          success: false,
+          code: '10403',
+          message: '仅平台管理员可以修改平台配置',
+          traceId: null,
+          data: null,
+        });
+      }),
+    );
+
+    renderPage();
+
+    const saveButton = await screen.findByRole('button', { name: /保存配置/ });
+    await waitFor(() => expect(saveButton).toBeEnabled());
+    await userEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(updateCalls).toBe(1);
+      expect(error).toHaveBeenCalledWith('仅平台管理员可以修改平台配置');
+    });
+    await waitFor(() => expect(saveButton).toBeEnabled());
+  });
+
+  it('falls back to default logo when custom logo fails to load', async () => {
+    server.use(
+      http.get('/api/platform/branding', () => HttpResponse.json({
+        ...brandingPayload(),
+        data: {
+          ...brandingPayload().data,
+          logoUrl: '/api/platform/branding/logo?v=5',
+        },
+      })),
+    );
+
+    renderPage();
+
+    const nameInput = await screen.findByPlaceholderText('CodeFlow');
+    await waitFor(() => expect(nameInput).not.toBeDisabled());
+
+    const logoImg = screen.getByRole('img', { name: 'CodeFlow' });
+    expect(logoImg.getAttribute('src')).toBe('/api/platform/branding/logo?v=5');
+
+    fireEvent.error(logoImg);
+
+    expect(logoImg.getAttribute('src')).toBe('/logo.svg');
+  });
+
+  it('shows an enabled back-to-workspaces entry beside the page title', async () => {
+    renderPage();
+
+    const backButton = await screen.findByRole('button', { name: /返回项目列表/ });
+    await waitFor(() => expect(backButton).toBeEnabled());
+    expect(screen.getByText('平台配置')).toBeInTheDocument();
+  });
+
+  it('navigates back to the workspace list when the back entry is clicked', async () => {
+    renderPageWithLocation();
+
+    expect(await screen.findByTestId('location-path')).toHaveTextContent('/workspaces/branding');
+
+    await userEvent.click(screen.getByRole('button', { name: /返回项目列表/ }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location-path')).toHaveTextContent(/^\/workspaces$/);
+    });
+  });
+
+  it('keeps the back entry above the collaboration notice section', async () => {
+    renderPage();
+
+    const backButton = await screen.findByRole('button', { name: /返回项目列表/ });
+    const noticeSection = await screen.findByText('通知机器人');
+
+    expect(
+      backButton.compareDocumentPosition(noticeSection) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('leaves directly with unsaved branding edits instead of prompting', async () => {
+    renderPageWithLocation();
+
+    const nameInput = await screen.findByPlaceholderText('CodeFlow');
+    await waitFor(() => expect(nameInput).not.toBeDisabled());
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, 'WonderHub');
+
+    await userEvent.click(screen.getByRole('button', { name: /返回项目列表/ }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location-path')).toHaveTextContent(/^\/workspaces$/);
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('groups branding, collaboration notice, enterprise SSO and platform admins into tabs', async () => {
+    renderPage();
+
+    expect(await screen.findByRole('tab', { name: '品牌与主题' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '消息渠道' })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: '企业 SSO' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '平台管理员' })).toBeInTheDocument();
+
+    // Branding stays the landing pane so an operator who only came to rename the platform does not
+    // have to hunt for the form.
+    const saveButton = await screen.findByRole('button', { name: /保存配置/ });
+    await waitFor(() => expect(saveButton).toBeEnabled());
+  });
+
+  it('hides the enterprise SSO tab from non-admins and falls back to branding', async () => {
+    let ssoRequests = 0;
+    window.localStorage.setItem('ainative.platform-config.tab', 'enterprise-sso');
+    server.use(
+      http.get('/api/platform/branding', () => HttpResponse.json({
+        ...brandingPayload(),
+        data: { ...brandingPayload().data, canManage: false },
+      })),
+      http.get('/api/platform/federation/overview', () => {
+        ssoRequests += 1;
+        return HttpResponse.json({
+          success: true,
+          code: '0',
+          message: '',
+          traceId: null,
+          data: { idps: [], connections: [] },
+        });
+      }),
+      http.get('/api/platform/federation/idps', () => {
+        ssoRequests += 1;
+        return HttpResponse.json({ success: true, code: '0', message: '', traceId: null, data: [] });
+      }),
+      http.get('/api/platform/federation/connections', () => {
+        ssoRequests += 1;
+        return HttpResponse.json({ success: true, code: '0', message: '', traceId: null, data: [] });
+      }),
+    );
+
+    renderPage();
+
+    // 企业 SSO 与用户管理同为管理员专属页签；历史存储的 SSO 页签落回品牌配置，且不触发任何 SSO 请求。
+    expect(await screen.findByRole('tab', { name: '品牌与主题' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', { name: '企业 SSO' })).not.toBeInTheDocument();
+    expect(ssoRequests).toBe(0);
+  });
+
+  it('hides the enterprise SSO tab when platform admin rights are revoked', async () => {
+    let canManage = true;
+    const empty = { success: true, code: '0', message: '', traceId: null, data: [] };
+    window.localStorage.setItem('ainative.platform-config.tab', 'enterprise-sso');
+    server.use(
+      http.get('/api/platform/branding', () => HttpResponse.json({
+        ...brandingPayload(),
+        data: { ...brandingPayload().data, canManage },
+      })),
+      http.get('/api/platform/federation/idps', () => HttpResponse.json(empty)),
+      http.get('/api/platform/federation/connections', () => HttpResponse.json(empty)),
+    );
+
+    const adminRender = renderPage();
+    expect(await screen.findByRole('button', { name: '新增 IdP' })).toBeInTheDocument();
+    adminRender.unmount();
+
+    canManage = false;
+    renderPage();
+
+    // 权限收回后企业 SSO 页签不再渲染，历史存储值落回品牌配置，避免空白页。
+    expect(await screen.findByRole('tab', { name: '品牌与主题' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', { name: '企业 SSO' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '新增 IdP' })).toBeNull();
+  });
+
+  it('loads enterprise SSO configuration only after its tab is opened', async () => {
+    let federationRequests = 0;
+    const empty = { success: true, code: '0', message: '', traceId: null, data: [] };
+    server.use(
+      http.get('/api/platform/federation/idps', () => {
+        federationRequests += 1;
+        return HttpResponse.json(empty);
+      }),
+      http.get('/api/platform/federation/connections', () => {
+        federationRequests += 1;
+        return HttpResponse.json(empty);
+      }),
+    );
+
+    renderPage();
+
+    await screen.findByRole('tab', { name: '企业 SSO' });
+    expect(federationRequests).toBe(0);
+
+    await openEnterpriseSsoTab();
+
+    await waitFor(() => expect(federationRequests).toBe(2));
+    expect(await screen.findByText('尚未配置身份提供方')).toBeInTheDocument();
+  });
+
+  it('restores the last selected platform configuration tab after remounting', async () => {
+    const firstRender = renderPage();
+
+    await openNotificationTab();
+    expect(window.localStorage.getItem('ainative.platform-config.tab')).toBe('notification');
+
+    firstRender.unmount();
+    renderPage();
+
+    expect(await screen.findByRole('tab', { name: '消息渠道' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('falls back to branding when the saved platform configuration tab is invalid', async () => {
+    window.localStorage.setItem('ainative.platform-config.tab', 'unknown');
+
+    renderPage();
+
+    expect(await screen.findByRole('tab', { name: '品牌与主题' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('falls back to branding when browser storage is unavailable', async () => {
+    vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => {
+      throw new Error('storage unavailable');
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole('tab', { name: '品牌与主题' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('keeps tab switching available when browser storage rejects writes', async () => {
+    const setItem = window.localStorage.setItem.bind(window.localStorage);
+    vi.spyOn(window.localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'ainative.platform-config.tab') throw new Error('storage unavailable');
+      setItem(key, value);
+    });
+
+    renderPage();
+    await openNotificationTab();
+
+    expect(screen.getByRole('tab', { name: /消息渠道/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('does not fetch the platform admin roster until its tab is opened', async () => {
+    let adminRequests = 0;
+    server.use(http.get('/api/platform/admins', () => {
+      adminRequests += 1;
+      return HttpResponse.json({
+        success: true,
+        code: '0',
+        message: '',
+        traceId: null,
+        data: { admins: [], canManage: false },
+      });
+    }));
+
+    renderPage();
+
+    await screen.findByRole('tab', { name: '平台管理员' });
+    expect(adminRequests).toBe(0);
+
+    await openPlatformAdminTab();
+
+    await waitFor(() => expect(adminRequests).toBe(1));
+  });
+
+  it('manages platform admins from the third tab', async () => {
+    server.use(http.get('/api/platform/admins', () => HttpResponse.json({
+      success: true,
+      code: '0',
+      message: '',
+      traceId: null,
+      data: {
+        admins: [
+          {
+            userId: 10000,
+            username: 'alice',
+            nickname: '爱丽丝',
+            email: 'alice@example.com',
+            active: true,
+            self: true,
+            removable: false,
+            removeDisabledReason: '平台管理员不可移除自己',
+          },
+          {
+            userId: 10001,
+            username: 'bob',
+            nickname: '鲍勃',
+            email: 'bob@example.com',
+            active: true,
+            self: false,
+            removable: true,
+            removeDisabledReason: null,
+          },
+        ],
+        canManage: true,
+      },
+    })));
+
+    renderPage();
+    await openPlatformAdminTab();
+
+    const selfRow = (await screen.findByText('爱丽丝')).closest('tr');
+    const otherRow = (await screen.findByText('鲍勃')).closest('tr');
+    expect(selfRow).not.toBeNull();
+    expect(otherRow).not.toBeNull();
+    expect(within(selfRow!).getByRole('button', { name: '移除' })).toBeDisabled();
+    expect(within(otherRow!).getByRole('button', { name: '移除' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '添加管理员' })).toBeDisabled();
+  });
+
+  it('switches platform configuration language from the shared header', async () => {
+    renderPage();
+    await screen.findByText('上传 Logo');
+    try {
+      await userEvent.click(screen.getByRole('button', { name: '切换语言' }));
+      await userEvent.click(await screen.findByRole('menuitem', { name: 'English' }));
+      expect(await screen.findByRole('heading', { name: 'Platform configuration' })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: 'Switch language' })).toHaveLength(1);
+    } finally {
+      await act(async () => { await i18n.changeLanguage('zh-CN'); });
+    }
+  });
+
+  it('exposes the user management tab to platform admins and loads its roster lazily', async () => {
+    let requests = 0;
+    server.use(http.get('/api/platform/users', () => {
+      requests += 1;
+      return HttpResponse.json({
+        success: true,
+        code: '0',
+        message: '',
+        traceId: null,
+        data: { totalAll: 0, total: 0, pageNum: 1, pageSize: 20, list: [] },
+      });
+    }));
+
+    renderPage();
+
+    await screen.findByRole('tab', { name: '用户管理' });
+    expect(requests).toBe(0);
+
+    await openUserManagementTab();
+
+    await waitFor(() => expect(requests).toBe(1));
+    expect(await screen.findByText('全部用户 0 人')).toBeInTheDocument();
+    expect(window.localStorage.getItem('ainative.platform-config.tab')).toBe('user-management');
+  });
+
+  it('hides the user management tab from non-admin operators and never fetches the roster', async () => {
+    let requests = 0;
+    server.use(
+      http.get('/api/platform/branding', () => HttpResponse.json({
+        ...brandingPayload(),
+        data: { ...brandingPayload().data, canManage: false },
+      })),
+      http.get('/api/platform/users', () => {
+        requests += 1;
+        return HttpResponse.json({
+          success: true,
+          code: '0',
+          message: '',
+          traceId: null,
+          data: { totalAll: 0, total: 0, pageNum: 1, pageSize: 20, list: [] },
+        });
+      }),
+    );
+
+    renderPage();
+
+    await screen.findByRole('tab', { name: '品牌与主题' });
+    expect(screen.queryByRole('tab', { name: '用户管理' })).not.toBeInTheDocument();
+    expect(requests).toBe(0);
+  });
+
+  it('restores a persisted user management tab for platform admins', async () => {
+    let requests = 0;
+    window.localStorage.setItem('ainative.platform-config.tab', 'user-management');
+    server.use(http.get('/api/platform/users', () => {
+      requests += 1;
+      return HttpResponse.json({
+        success: true,
+        code: '0',
+        message: '',
+        traceId: null,
+        data: { totalAll: 0, total: 0, pageNum: 1, pageSize: 20, list: [] },
+      });
+    }));
+
+    renderPage();
+
+    expect(await screen.findByRole('tab', { name: '用户管理' })).toHaveAttribute('aria-selected', 'true');
+    await waitFor(() => expect(requests).toBe(1));
+  });
+
+  it('falls back to branding when a persisted user management tab is opened by a non-admin', async () => {
+    window.localStorage.setItem('ainative.platform-config.tab', 'user-management');
+    server.use(
+      http.get('/api/platform/branding', () => HttpResponse.json({
+        ...brandingPayload(),
+        data: { ...brandingPayload().data, canManage: false },
+      })),
+    );
+
+    renderPage();
+
+    expect(await screen.findByRole('tab', { name: '品牌与主题' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', { name: '用户管理' })).not.toBeInTheDocument();
+  });
+
+it('switches to Feishu through the persisted selection without reusing DingTalk credentials or requiring RobotCode', async () => {
+  let saved: UpdateDingTalkImChannelParams | undefined;
+  let selection: { provider: string } | undefined;
+  server.use(
+    http.get('/api/platform/branding', () => HttpResponse.json(brandingPayload())),
+    http.get('/api/platform/im-channels', () => HttpResponse.json(imChannelsPayload())),
+    http.put('/api/platform/im-channels/selection', async ({ request }) => {
+      selection = await request.json() as { provider: string };
+      return HttpResponse.json(imSelectionPayload('FEISHU', 2));
+    }),
+    http.put('/api/platform/im-channels/feishu', async ({ request }) => {
+      saved = await request.json() as UpdateDingTalkImChannelParams;
+      return HttpResponse.json({ ...imChannelsPayload(), data: { provider: 'FEISHU', ...saved } });
+    }),
+  );
+  renderPage(); await openNotificationTab();
+  await userEvent.click(await screen.findByRole('button', { name: '切换渠道' }));
+  await userEvent.click(await screen.findByRole('button', { name: '切换为飞书' }));
+  await waitFor(() => expect(selection).toEqual({ provider: 'FEISHU', expectedGeneration: 1 }));
+  expect(await screen.findByText('平台现在的渠道:飞书')).toBeInTheDocument();
+  expect(screen.queryByLabelText('RobotCode')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('App ID')).toHaveValue('');
+  expect(screen.getByLabelText('AppSecret')).toHaveValue('');
+  expect(await screen.findByLabelText('群聊 App ID')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('switch', { name: '开启 飞书 机器人' }));
+  await userEvent.type(screen.getByLabelText('App ID'), 'cli_test');
+  await userEvent.type(screen.getByLabelText('AppSecret'), 'feishu-secret');
+  await userEvent.click(screen.getByRole('button', { name: /保存通知配置/ }));
+  await waitFor(() => expect(saved).toEqual({ enabled: true, appKey: 'cli_test', appSecret: 'feishu-secret', robotCode: '' }));
+});
+
+it('prefers the persisted provider selection over the channel list', async () => {
+  server.use(http.get('/api/platform/im-channels/selection', () => HttpResponse.json(imSelectionPayload('FEISHU', 3))));
+  renderPage(); await openNotificationTab();
+
+  expect(await screen.findByText('平台现在的渠道:飞书')).toBeInTheDocument();
+  expect(screen.getByLabelText('App ID')).toBeInTheDocument();
+  expect(screen.queryByLabelText('RobotCode')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('群聊 AppKey')).not.toBeInTheDocument();
+  expect(await screen.findByLabelText('群聊 App ID')).toBeInTheDocument();
+});
+
+it('keeps the persisted channel and reports selection save failures', async () => {
+  server.use(
+    http.get('/api/platform/branding', () => HttpResponse.json(brandingPayload())),
+    http.get('/api/platform/im-channels', () => HttpResponse.json(imChannelsPayload())),
+    http.put('/api/platform/im-channels/selection', () => HttpResponse.json({
+      success: false,
+      code: '10500',
+      message: '渠道切换失败',
+      traceId: null,
+      data: null,
+    })),
+  );
+  renderPage(); await openNotificationTab();
+  await userEvent.click(await screen.findByRole('button', { name: '切换渠道' }));
+  await userEvent.click(await screen.findByRole('button', { name: '切换为飞书' }));
+
+  await waitFor(() => expect(message.error).toHaveBeenCalledWith('渠道切换失败'));
+  expect(screen.getByText('平台现在的渠道:钉钉')).toBeInTheDocument();
+  expect(screen.getByLabelText('AppKey')).toHaveValue('ding-app');
+});
+
+it('hides the shared group-chat panel from non-admin operators', async () => {
+  server.use(http.get('/api/platform/branding', () => HttpResponse.json({
+    ...brandingPayload(),
+    data: { ...brandingPayload().data, canManage: false },
+  })));
+  renderPage(); await openNotificationTab();
+
+  expect(await screen.findByRole('switch', { name: '开启 钉钉 机器人' })).toBeInTheDocument();
+  expect(screen.queryByText('群聊机器人')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '保存群聊机器人' })).not.toBeInTheDocument();
+});
+
+it('warns about unsaved notification input before switching the platform channel', async () => {
+  renderPage(); await openNotificationTab();
+
+  const appKeyInput = await screen.findByLabelText('AppKey');
+  await waitFor(() => expect(appKeyInput).not.toBeDisabled());
+  await userEvent.type(appKeyInput, '-dirty');
+  await userEvent.click(screen.getByRole('button', { name: '切换渠道' }));
+
+  expect(await screen.findByText('有未保存的修改，切换前请先保存或明确放弃。')).toBeInTheDocument();
+});
+
+it('does not flag unsaved input after the notification section is saved', async () => {
+  let saved = 0;
+  server.use(http.put('/api/platform/im-channels/dingtalk', () => {
+    saved += 1;
+    return HttpResponse.json(imChannelsPayload());
+  }));
+  renderPage(); await openNotificationTab();
+
+  const appKeyInput = await screen.findByLabelText('AppKey');
+  await waitFor(() => expect(appKeyInput).not.toBeDisabled());
+  await userEvent.type(appKeyInput, '-saved');
+  await userEvent.click(screen.getByRole('button', { name: /保存通知配置/ }));
+  await waitFor(() => expect(saved).toBe(1));
+
+  await userEvent.click(screen.getByRole('button', { name: '切换渠道' }));
+  expect(screen.queryByText('有未保存的修改，切换前请先保存或明确放弃。')).not.toBeInTheDocument();
+});
+
+it('saves only the notification section without touching selection or group-chat', async () => {
+  let noticeSaves = 0;
+  let selectionWrites = 0;
+  let groupChatWrites = 0;
+  server.use(
+    http.put('/api/platform/im-channels/dingtalk', () => {
+      noticeSaves += 1;
+      return HttpResponse.json(imChannelsPayload());
+    }),
+    http.put('/api/platform/im-channels/selection', () => {
+      selectionWrites += 1;
+      return HttpResponse.json(imSelectionPayload());
+    }),
+    http.put('/api/platform/im-channels/DINGTALK/group-chat', () => {
+      groupChatWrites += 1;
+      return HttpResponse.json(groupChatPayload('DINGTALK'));
+    }),
+  );
+  renderPage(); await openNotificationTab();
+
+  const appKeyInput = await screen.findByLabelText('AppKey');
+  await waitFor(() => expect(appKeyInput).not.toBeDisabled());
+  await userEvent.type(appKeyInput, '-independent');
+  await userEvent.click(screen.getByRole('button', { name: /保存通知配置/ }));
+  await waitFor(() => expect(noticeSaves).toBe(1));
+
+  expect(selectionWrites).toBe(0);
+  expect(groupChatWrites).toBe(0);
+});
+
+it('performs no write when the channel switch is cancelled', async () => {
+  let selectionWrites = 0;
+  server.use(http.put('/api/platform/im-channels/selection', () => {
+    selectionWrites += 1;
+    return HttpResponse.json(imSelectionPayload('FEISHU', 2));
+  }));
+  renderPage(); await openNotificationTab();
+
+  await userEvent.click(screen.getByRole('button', { name: '切换渠道' }));
+  await userEvent.click(await screen.findByRole('button', { name: /取\s*消/ }));
+
+  await waitFor(() => expect(screen.queryByRole('button', { name: '切换为飞书' })).not.toBeInTheDocument());
+  expect(selectionWrites).toBe(0);
+  expect(screen.getByText('平台现在的渠道:钉钉')).toBeInTheDocument();
+});
+
+});

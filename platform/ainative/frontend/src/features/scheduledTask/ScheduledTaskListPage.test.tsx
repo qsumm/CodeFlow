@@ -1,0 +1,258 @@
+import { afterEach as resetAfterEach } from 'vitest';
+import { act } from '@testing-library/react';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import { createAppRoutes } from '@/app/router';
+import { i18n } from '@/shared/i18n';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { http, HttpResponse } from 'msw';
+import { message } from 'antd';
+import { server } from '@/test/mocks/server';
+import { useAuthStore } from '@/shared/auth/store';
+import { ScheduledTaskListPage } from './ScheduledTaskListPage';
+
+const TASK = { id: 7, name: '凌晨回归', squadId: 1, initialAgentId: 11, status: 'ACTIVE', scheduleType: 'CRON', cronExpression: '0 0 2 * * *', timezone: 'Asia/Shanghai', nextFireAt: '2026-08-12T18:00:00Z', version: 3 };
+
+function readHandlers() {
+  return [
+    http.get('/api/scheduled-tasks', () => HttpResponse.json({ success: true, code: '0', message: '', data: { list: [TASK], total: 1, pageNum: 0, pageSize: 20 } })),
+    http.get('/api/squads', () => HttpResponse.json({ success: true, code: '0', message: '', data: { list: [], total: 0, pageNum: 1, pageSize: 100 } })),
+    http.get('/api/agents', () => HttpResponse.json({ success: true, code: '0', message: '', data: [] })),
+    http.get('/api/scheduled-tasks/7/runs', () => HttpResponse.json({ success: true, code: '0', message: '', data: [] })),
+    http.get('/api/scheduled-tasks/summary', () => HttpResponse.json({ success: true, code: '0', message: '', data: { running: 0, today: 0, success30d: 0, completed30d: 0, attention: 0 } })),
+  ];
+}
+
+const TAB_STORAGE_KEY = 'ainative.scheduled-tasks.tab';
+
+const SCHEDULED_WORKITEM = {
+  id: 1,
+  title: '定时需求A',
+  workType: 'REQ',
+  statusName: '新建',
+  priority: 2,
+  assigneeType: 'AGENT',
+  assigneeRef: 40013,
+  assigneeName: 'AW全栈开发',
+  version: 1,
+  gmtCreate: '2026-09-01',
+  gmtModified: '2026-09-01',
+  scheduledStartAt: new Date(Date.now() + 3_600_000).toISOString(),
+  scheduledPhase: 'PENDING',
+};
+
+function workitemHandler(requests: string[]) {
+  return http.get('/api/workitems', ({ request }) => {
+    requests.push(new URL(request.url).searchParams.toString());
+    return HttpResponse.json({
+      success: true, code: '0', message: '', traceId: null,
+      data: { list: [SCHEDULED_WORKITEM], total: 1, pageNum: 1, pageSize: 20 },
+    });
+  });
+}
+
+function renderList(accessLevel: 'READ_ONLY' | 'READ_WRITE') {
+  useAuthStore.setState({ accessLevel });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  return render(<QueryClientProvider client={queryClient}><MemoryRouter><ScheduledTaskListPage /></MemoryRouter></QueryClientProvider>);
+}
+
+async function confirmPopconfirm(user: ReturnType<typeof userEvent.setup>) {
+  const titles = await screen.findAllByText('删了就不再调度,不可恢复');
+  const popup = titles[titles.length - 1].closest('.ant-popconfirm') ?? document;
+  const buttons = popup.querySelectorAll('.ant-popconfirm-buttons button');
+  expect(buttons.length).toBeGreaterThan(0);
+  await user.click(buttons[buttons.length - 1] as HTMLButtonElement);
+}
+
+describe('ScheduledTaskListPage', () => {
+  beforeEach(() => {
+    window.localStorage.removeItem(TAB_STORAGE_KEY);
+  });
+
+  it('renders task status, next execution and run-now action', async () => {
+    server.use(
+      http.get('/api/scheduled-tasks', () => HttpResponse.json({ success: true, code: '0', message: '', data: { list: [{ id: 7, name: '凌晨回归', squadId: 1, initialAgentId: 11, status: 'ACTIVE', scheduleType: 'CRON', cronExpression: '0 0 2 * * *', timezone: 'Asia/Shanghai', nextFireAt: '2026-08-12T18:00:00Z', version: 3 }], total: 41, pageNum: 0, pageSize: 20 } })),
+      http.get('/api/squads', () => HttpResponse.json({ success: true, code: '0', message: '', data: [] })),
+      http.get('/api/agents', () => HttpResponse.json({ success: true, code: '0', message: '', data: [] })),
+      http.get('/api/scheduled-tasks/7/runs', () => HttpResponse.json({ success: true, code: '0', message: '', data: [{ id: 80, scheduledTaskId: 7, status: 'SUCCEEDED' }] })),
+      http.get('/api/scheduled-tasks/summary', () => HttpResponse.json({ success: true, code: '0', message: '', data: { running: 2, today: 3, success30d: 8, attention: 1 } })),
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={queryClient}><MemoryRouter><ScheduledTaskListPage /></MemoryRouter></QueryClientProvider>);
+
+    expect(await screen.findByText('凌晨回归')).toBeInTheDocument();
+    expect(screen.getByText('启用中')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '立即跑' })).toBeInTheDocument();
+    expect(await screen.findByText('成功')).toBeInTheDocument();
+    const summary = screen.getByLabelText('汇总');
+    expect(summary).toHaveTextContent('任务总数');
+    expect(summary).toHaveTextContent('41');
+    expect(summary).toHaveTextContent('进行中');
+    expect(summary).toHaveTextContent('2');
+  });
+
+  it('filters by the current creator on the server and resets pagination', async () => {
+    const user = userEvent.setup();
+    useAuthStore.setState({ user: { id: 42, username: 'tester', nickname: 'Tester', email: 'tester@example.com' } });
+    const requests: URLSearchParams[] = [];
+    server.use(...readHandlers());
+    server.use(http.get('/api/scheduled-tasks', ({ request }) => {
+      const params = new URL(request.url).searchParams;
+      requests.push(params);
+      return HttpResponse.json({ success: true, code: '0', data: {
+        list: [TASK], total: params.has('creatorId') ? 1 : 41,
+      } });
+    }));
+    renderList('READ_WRITE');
+    const summary = screen.getByLabelText('汇总');
+    await waitFor(() => expect(within(summary).getByText('41')).toBeInTheDocument());
+    await user.click(screen.getByTitle('2'));
+    await waitFor(() => expect(requests.at(-1)?.get('offset')).toBe('10'));
+    await user.click(screen.getByText('我创建的'));
+    await waitFor(() => expect(within(summary).getByText('1')).toBeInTheDocument());
+    expect(requests.at(-1)?.get('creatorId')).toBe('42');
+    expect(requests.at(-1)?.get('offset')).toBe('0');
+    await user.click(screen.getByText('全部'));
+    await waitFor(() => expect(within(summary).getByText('41')).toBeInTheDocument());
+    await waitFor(() => expect(requests.at(-1)?.has('creatorId')).toBe(false));
+  });
+
+  it('deletes a task after confirmation and sends the optimistic version', async () => {
+    const user = userEvent.setup();
+    let deletedUrl: string | null = null;
+    const successSpy = vi.spyOn(message, 'success').mockImplementation(() => undefined as never);
+    server.use(
+      ...readHandlers(),
+      http.delete('/api/scheduled-tasks/7', ({ request }) => {
+        deletedUrl = request.url;
+        return HttpResponse.json({ success: true, code: '0', message: '', data: null });
+      }),
+    );
+
+    renderList('READ_WRITE');
+    await user.click(await screen.findByRole('button', { name: '删除' }));
+    await confirmPopconfirm(user);
+
+    await waitFor(() => expect(deletedUrl).toContain('version=3'));
+    expect(successSpy).toHaveBeenCalledWith('任务已删');
+    successSpy.mockRestore();
+  });
+
+  it('refuses to delete for read-only members without calling the api', async () => {
+    const user = userEvent.setup();
+    let deleteRequests = 0;
+    const errorSpy = vi.spyOn(message, 'error').mockImplementation(() => undefined as never);
+    server.use(
+      ...readHandlers(),
+      http.delete('/api/scheduled-tasks/7', () => {
+        deleteRequests += 1;
+        return HttpResponse.json({ success: true, code: '0', message: '', data: null });
+      }),
+    );
+
+    renderList('READ_ONLY');
+    await user.click(await screen.findByRole('button', { name: '删除' }));
+    await confirmPopconfirm(user);
+
+    expect(errorSpy).toHaveBeenCalledWith('当前为只读权限，删除任务需要读写权限');
+    expect(deleteRequests).toBe(0);
+    errorSpy.mockRestore();
+  });
+
+  it('keeps the existing task list on the default tab without querying scheduled workitems', async () => {
+    const requests: string[] = [];
+    server.use(...readHandlers(), workitemHandler(requests));
+
+    renderList('READ_WRITE');
+
+    expect(await screen.findByText('凌晨回归')).toBeInTheDocument();
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['定时任务', '定时工作项']);
+    expect(screen.getByRole('tab', { name: '定时任务' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: '立即跑' })).toBeInTheDocument();
+    expect(requests).toHaveLength(0);
+  });
+
+  it('loads scheduled workitems and remembers the tab when switching to 定时工作项', async () => {
+    const user = userEvent.setup();
+    const requests: string[] = [];
+    server.use(...readHandlers(), workitemHandler(requests));
+
+    renderList('READ_WRITE');
+    await user.click(await screen.findByRole('tab', { name: '定时工作项' }));
+
+    expect(await screen.findByText('定时需求A')).toBeInTheDocument();
+    expect(requests[0]).toContain('scheduledStart=ALL');
+    expect(window.localStorage.getItem(TAB_STORAGE_KEY)).toBe('workitems');
+  });
+
+  it('restores the remembered tab on the next visit', async () => {
+    const requests: string[] = [];
+    window.localStorage.setItem(TAB_STORAGE_KEY, 'workitems');
+    server.use(...readHandlers(), workitemHandler(requests));
+
+    renderList('READ_WRITE');
+
+    expect(await screen.findByText('定时需求A')).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: /定时工作项$/ })).toHaveAttribute('aria-selected', 'true');
+    expect(requests[0]).toContain('scheduledStart=ALL');
+  });
+});
+
+it('switches cached list and both tabs without resetting filters, page or queries', async () => {
+  window.localStorage.removeItem(TAB_STORAGE_KEY);
+  useAuthStore.setState({ accessLevel: 'READ_WRITE', user: { id: 42, username: 'tester', nickname: 'Tester', email: 'tester@example.com' } });
+  const requests: string[] = [];
+  server.use(http.get('/api/scheduled-tasks', ({ request }) => { requests.push(new URL(request.url).search); return HttpResponse.json({ success: true, code: '0', data: { list: [TASK], total: 41 } }); }), ...readHandlers(), workitemHandler([]));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const route = createAppRoutes().flatMap(route => route.children ?? []).find(route => route.path === '/scheduled-tasks')!;
+  const router = createMemoryRouter([route], { initialEntries: ['/scheduled-tasks'] });
+  render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>);
+  const user = userEvent.setup();
+  await screen.findByText('凌晨回归');
+  await user.click(screen.getByText('我创建的'));
+  await waitFor(() => expect(requests.at(-1)).toContain('creatorId=42'));
+  await user.click(screen.getByTitle('2'));
+  await waitFor(() => expect(requests.at(-1)).toContain('offset=10'));
+  const beforeSwitch = [...requests];
+  await act(() => i18n.changeLanguage('en-US'));
+  expect(screen.getByRole('tab', { name: 'Scheduled tasks' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('button', { name: 'Run now' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
+  expect(screen.getByText('Agent #11')).toBeInTheDocument();
+  expect(screen.getByLabelText('Scope')).toHaveTextContent('Created by me');
+  expect(requests).toEqual(beforeSwitch);
+  await user.click(screen.getByRole('tab', { name: 'Scheduled work items' }));
+  await screen.findByText('定时需求A');
+  await act(() => i18n.changeLanguage('zh-CN'));
+  expect(await screen.findByRole('tab', { name: /定时工作项$/ })).toHaveAttribute('aria-selected', 'true');
+  expect(window.localStorage.getItem(TAB_STORAGE_KEY)).toBe('workitems');
+});
+
+it.each([[0, '0'], [1, '1'], [2, '2']])('renders numeric English totals for %s tasks', async (count, label) => {
+  window.localStorage.removeItem(TAB_STORAGE_KEY);
+  server.use(http.get('/api/scheduled-tasks', () => HttpResponse.json({ success: true, code: '0', data: { list: [], total: count } })), ...readHandlers());
+  await act(() => i18n.changeLanguage('en-US'));
+  renderList('READ_WRITE');
+  const summary = screen.getByLabelText('Summary');
+  await waitFor(() => expect(summary).toHaveTextContent(label));
+  expect(summary).not.toHaveTextContent('scheduledTask:');
+  await act(() => i18n.changeLanguage('zh-CN'));
+});
+
+resetAfterEach(async () => { await act(() => i18n.changeLanguage('zh-CN')); });
+
+it.each(['zh-CN', 'en-US'])('final widget scheduled task clear preserves search button and server filter in %s', async locale => {
+ window.localStorage.removeItem(TAB_STORAGE_KEY); const requests: URLSearchParams[] = [];
+ server.use(http.get('/api/scheduled-tasks', ({ request }) => { requests.push(new URL(request.url).searchParams); return HttpResponse.json({ success: true, data: { list: [], total: 0 } }); }), ...readHandlers());
+ await i18n.changeLanguage(locale); renderList('READ_WRITE');
+ const input = screen.getByLabelText(locale === 'en-US' ? 'Keyword' : '关键词');
+ const search = screen.getByRole('button', { name: locale === 'en-US' ? 'Search' : '搜索' });
+ await userEvent.type(input, '<raw>中文'); await userEvent.click(search);
+ await waitFor(() => expect(requests.at(-1)?.get('keyword')).toBe('<raw>中文'));
+ await userEvent.click(screen.getByRole('button', { name: locale === 'en-US' ? 'Clear search' : '清空搜索' }));
+ await waitFor(() => expect(requests.at(-1)?.has('keyword')).toBe(false)); expect(input).toHaveValue(''); expect(requests.at(-1)?.get('offset')).toBe('0');
+});

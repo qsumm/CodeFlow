@@ -1,0 +1,37 @@
+{
+  "title": "Help center",
+  "chapters": "Help chapters",
+  "outline": "On this page",
+  "download": "Download",
+  "previous": "Previous chapter",
+  "next": "Next chapter",
+  "load": {
+    "failed": "Could not load the help documentation. Please refresh the page or retry.",
+    "loading": "Loading help documentation…",
+    "retry": "Retry"
+  },
+  "code": {
+    "label": "Code",
+    "copyLabel": "Copy code",
+    "copy": "Copy",
+    "copied": "Copied",
+    "success": "Code copied",
+    "failure": "Copy failed. Select the code and copy it manually."
+  },
+  "docs": {
+    "center": "Documentation",
+    "search": "Search docs",
+    "version": "V1.2.0",
+    "tree": "DOCUMENTATION",
+    "product": "CodeFlow",
+    "updatedAt": "Updated: v1.2.0 · 2026-11-12",
+    "refresh": "Refresh",
+    "share": "Share",
+    "linkCopied": "Link copied",
+    "back": "Back to workspace"
+  },
+  "pdf": {
+    "preview": "Open preview",
+    "download": "Download PDF"
+  }
+}

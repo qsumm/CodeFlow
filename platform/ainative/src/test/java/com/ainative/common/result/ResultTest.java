@@ -1,0 +1,93 @@
+package com.ainative.common.result;
+
+import com.ainative.json.JSON;
+import com.ainative.common.error.ErrorCode;
+import com.ainative.context.RequestContext;
+import com.ainative.log.BizLog;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
+import org.springframework.test.util.ReflectionTestUtils;
+import static org.junit.jupiter.api.Assertions.*;
+
+class ResultTest {
+    @AfterEach
+    void tearDown() {
+        RequestContext.destroy();
+        MDC.clear();
+    }
+
+    @Test
+    void okWrapsData() {
+        Result<String> r = Result.ok("hello");
+        assertTrue(r.isSuccess());
+        assertEquals("0", r.getCode());
+        assertEquals("hello", r.getData());
+    }
+
+    @Test
+    void failCarriesErrorCode() {
+        Result<Void> r = Result.fail(ErrorCode.NO_PERMISSION);
+        assertFalse(r.isSuccess());
+        assertEquals("10403", r.getCode());
+        assertNull(r.getData());
+    }
+
+    @Test
+    void resultCarriesCurrentRequestId() {
+        RequestContext.get().setRequestId("rid-123");
+
+        Result<String> r = Result.ok("hello");
+
+        assertEquals("rid-123", r.getRequestId());
+    }
+
+    @Test
+    void requestIdSerializesAsSnakeCaseForJacksonAndFastjson() throws Exception {
+        RequestContext.get().setRequestId("rid-456");
+        Result<Void> r = Result.fail(ErrorCode.NO_PERMISSION);
+
+        JsonNode jackson = new ObjectMapper().valueToTree(r);
+        assertEquals("rid-456", jackson.get("request_id").asText());
+        assertFalse(jackson.has("requestId"));
+
+        String fastjson = JSON.toJSONString(r);
+        assertTrue(fastjson.contains("\"request_id\":\"rid-456\""));
+        assertFalse(fastjson.contains("\"requestId\""));
+    }
+
+    @Test
+    void resultFallsBackToMdcRequestIdWhenContextMissingIt() {
+        MDC.put("requestId", "rid-mdc");
+
+        Result<Void> r = Result.fail(ErrorCode.SYSTEM_ERROR);
+
+        assertEquals("rid-mdc", r.getRequestId());
+    }
+
+    @Test
+    void okMarksCurrentBusinessLogSuccessful() {
+        BizLog log = new BizLog();
+        RequestContext.get().setBizLog(log);
+
+        Result.ok("hello");
+
+        assertEquals(Boolean.TRUE, ReflectionTestUtils.getField(log, "success"));
+        assertNull(log.getErrorCode());
+        assertNull(log.getErrorMsg());
+    }
+
+    @Test
+    void failCopiesCodeAndMessageToCurrentBusinessLog() {
+        BizLog log = new BizLog();
+        RequestContext.get().setBizLog(log);
+
+        Result.fail(ErrorCode.NO_PERMISSION);
+
+        assertEquals(Boolean.FALSE, ReflectionTestUtils.getField(log, "success"));
+        assertEquals(ErrorCode.NO_PERMISSION.getCode(), log.getErrorCode());
+        assertEquals(ErrorCode.NO_PERMISSION.getMessage(), log.getErrorMsg());
+    }
+}

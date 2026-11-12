@@ -1,0 +1,10 @@
+{
+  "hero": {
+    "statsProjects": "{{count}} 个项目",
+    "statsCurrent": "当前：{{name}}",
+    "statsNone": "尚未选择项目"
+  },
+  "card": {
+    "enterHint": "点击进入项目工作台"
+  }
+}

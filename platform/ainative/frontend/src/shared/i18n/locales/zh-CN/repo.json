@@ -1,0 +1,143 @@
+{
+  "fields": {
+    "id": "ID",
+    "name": "名称",
+    "url": "URL",
+    "description": "描述",
+    "created": "创建时间",
+    "actions": "操作",
+    "repoName": "仓库标识",
+    "repoUrl": "Clone 地址",
+    "branch": "默认分支",
+    "peer": "对端仓库",
+    "relationType": "连线类型",
+    "source": "起点仓库",
+    "target": "终点仓库"
+  },
+  "actions": {
+    "addRepo": "接入仓库",
+    "deleteRepo": "移出仓库",
+    "map": "依赖图谱",
+    "save": "保存",
+    "cancel": "取消",
+    "confirm": "确定",
+    "delete": "删除",
+    "back": "返回",
+    "edit": "编辑",
+    "backList": "回到清单",
+    "addRelation": "建连线",
+    "deleteRelation": "断开连线",
+    "close": "关闭",
+    "addRepoRelation": "新建仓库连线",
+    "deleteRepoRelation": "删除仓库连线",
+    "editRepo": "编辑仓库档案",
+    "saveRepo": "保存档案",
+    "saveConclusion": "保存扫描结论",
+    "editConclusion": "改扫描结论",
+    "startScan": "启动 AI 扫描",
+    "scan": "启动扫描",
+    "editConclusionButton": "改结论",
+    "deleteRepoLabel": "移出仓库 {{name}}",
+    "clearBranch": "清空默认分支",
+    "clearDescription": "清空描述"
+  },
+  "feedback": {
+    "added": "仓库已接入",
+    "deleted": "仓库已移出",
+    "repoSaved": "档案已保存",
+    "conclusionSaved": "结论已存档",
+    "relationCreated": "连线已建立",
+    "relationDeleted": "连线已断开",
+    "scanConfirmed": "扫描结论已定稿入库"
+  },
+  "errors": {
+    "addRepo": "接入仓库没成功",
+    "deleteRepo": "移出仓库没成功",
+    "save": "保存失败",
+    "create": "创建失败",
+    "invalidId": "无效的 ID",
+    "load": "加载失败",
+    "retry": "请稍后重试",
+    "graphRender": "图谱这会儿画不出来,刷新页面再试。",
+    "graphResize": "画布适配失败,请重试。"
+  },
+  "validation": {
+    "nameRequired": "给仓库起个标识",
+    "urlRequired": "填 Clone 地址",
+    "urlInvalid": "URL 格式不对",
+    "sourceRequired": "选起点仓库",
+    "targetRequired": "选终点仓库",
+    "typeRequired": "选连线类型",
+    "nameInvalid": "仓库标识只能是单级目录名:不能含 / 或 \\、不能是 . 或 ..、不能是绝对路径。namespace/repo-name 形式的标识请整段填进 Clone 地址,这里只填单级目录名"
+  },
+  "placeholders": {
+    "urlExample": "https://github.com/example/repo 或 git@example.com:workspace/repo.git",
+    "repoUrl": "git@host:group/repo.git 或 https://…",
+    "clearBranch": "留空即清空默认分支",
+    "clearDescription": "仓库背景,留空即清空",
+    "source": "选起点仓库",
+    "target": "选终点仓库",
+    "type": "选连线类型",
+    "description": "可不填"
+  },
+  "confirm": {
+    "deleteHint": "移出后该仓库的全部连线一并消失,不可恢复。",
+    "deleteRelation": "断开这条连线?",
+    "deleteRepo": "移出仓库「{{name}}」?"
+  },
+  "tabs": {
+    "info": "档案",
+    "relations": "连线",
+    "conclusion": "扫描结论"
+  },
+  "scan": {
+    "status": "扫描进度",
+    "complete": "已扫完",
+    "notScanned": "还没扫",
+    "lastTime": "最近一次扫描",
+    "purpose": "用途",
+    "business": "核心业务",
+    "upstreams": "上游供给",
+    "downstreams": "下游去向",
+    "purposePlaceholder": "这个仓库是干什么的",
+    "businessPlaceholder": "核心业务领域",
+    "upstreamsPlaceholder": "上游仓库/服务,逗号分隔",
+    "downstreamsPlaceholder": "下游仓库/服务,逗号分隔",
+    "markdown": "总结(Markdown)",
+    "summaryPlaceholder": "仓库详情总结…",
+    "summary": "总结",
+    "empty": "还没有扫描结论",
+    "emptyHint": "启动一次扫描,或直接手写结论",
+    "drawer": "AI 扫描"
+  },
+  "map": {
+    "help": "滚轮缩放 · 拖动画布 · 点节点看详情",
+    "zoomOut": "缩小图谱",
+    "zoomIn": "放大图谱",
+    "exitFullscreen": "退出全屏",
+    "fullscreen": "全屏浏览",
+    "fit": "铺满画布",
+    "empty": "画布还是空的",
+    "emptyHint": "先添加仓库并建立关系,图谱会在这里长出来。",
+    "details": "连线详情",
+    "source": "起点:",
+    "target": "终点:",
+    "type": "类型:",
+    "description": "备注:"
+  },
+  "hub": {
+    "title": "代码仓库",
+    "listHint": "接入远端仓库,维护凭据、分支授权与访问范围",
+    "mapHint": "在画布上梳理仓库间调用与依赖,点击节点可下钻"
+  },
+  "relation": {
+    "frontend": "前端",
+    "backend": "后端",
+    "clientServer": "客户端调服务端",
+    "serverClient": "服务端推客户端",
+    "gateway": "网关",
+    "dependency": "依赖",
+    "service": "服务互调",
+    "other": "其他"
+  }
+}

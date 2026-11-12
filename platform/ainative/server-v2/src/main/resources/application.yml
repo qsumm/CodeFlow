@@ -1,0 +1,19 @@
+server:
+  port: 7011
+spring:
+  application:
+    name: ainative-v2
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:2891}/${DB_NAME:ainative_v2}?useSSL=false&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: 10
+ainative:
+  jwt-secret: ${AINATIVE_JWT_SECRET:}
+  jwt-ttl-seconds: 7200
+  public-base-url: ${AINATIVE_PUBLIC_BASE_URL_V2:http://localhost:7011}
+  download-secret: ${AINATIVE_DOWNLOAD_SECRET:v2-download-secret}
+logging:
+  level:
+    com.ainative.v2: INFO

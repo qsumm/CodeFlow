@@ -1,0 +1,87 @@
+package com.ainative.audit;
+
+import com.ainative.audit.dto.AuditLogQuery;
+import com.ainative.audit.dto.AuditLogVO;
+import com.ainative.common.error.BizException;
+import com.ainative.common.error.ErrorCode;
+import com.ainative.common.result.Result;
+import com.ainative.context.RequestContext;
+import com.ainative.access.WorkspaceAccessLevel;
+import com.ainative.access.RequireWorkspaceAccess;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/audit-logs")
+@RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_ONLY, action = "查看审计日志", actionKey = "access.action.view_audit_logs")
+public class AuditLogController {
+
+    private final AuditLogService auditLogService;
+
+    public AuditLogController(AuditLogService auditLogService) {
+        this.auditLogService = auditLogService;
+    }
+
+    @GetMapping
+    public Result<List<AuditLogVO>> search(
+            @RequestParam(value = "module", required = false) String module,
+            @RequestParam(value = "action", required = false) String action,
+            @RequestParam(value = "riskLevel", required = false) String riskLevel,
+            @RequestParam(value = "actorType", required = false) String actorType,
+            @RequestParam(value = "actorId", required = false) Long actorId,
+            @RequestParam(value = "targetType", required = false) String targetType,
+            @RequestParam(value = "targetId", required = false) Long targetId,
+            @RequestParam(value = "startTime", required = false) String startTime,
+            @RequestParam(value = "endTime", required = false) String endTime,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        AuditLogQuery query = new AuditLogQuery();
+        query.setModule(module);
+        query.setAction(action);
+        query.setRiskLevel(riskLevel);
+        query.setActorId(actorId);
+        query.setActorType(actorType);
+        query.setTargetType(targetType);
+        query.setTargetId(targetId);
+        query.setStartTime(startTime);
+        query.setEndTime(endTime);
+        query.setKeyword(keyword);
+        return Result.ok(auditLogService.search(query, currentWorkspaceId(), page, size));
+    }
+
+    @GetMapping("/count")
+    public Result<Integer> count(
+            @RequestParam(value = "module", required = false) String module,
+            @RequestParam(value = "action", required = false) String action,
+            @RequestParam(value = "riskLevel", required = false) String riskLevel,
+            @RequestParam(value = "actorType", required = false) String actorType,
+            @RequestParam(value = "actorId", required = false) Long actorId,
+            @RequestParam(value = "targetType", required = false) String targetType,
+            @RequestParam(value = "targetId", required = false) Long targetId,
+            @RequestParam(value = "startTime", required = false) String startTime,
+            @RequestParam(value = "endTime", required = false) String endTime,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        AuditLogQuery query = new AuditLogQuery();
+        query.setModule(module);
+        query.setAction(action);
+        query.setRiskLevel(riskLevel);
+        query.setActorId(actorId);
+        query.setActorType(actorType);
+        query.setTargetType(targetType);
+        query.setTargetId(targetId);
+        query.setStartTime(startTime);
+        query.setEndTime(endTime);
+        query.setKeyword(keyword);
+        return Result.ok(auditLogService.count(query, currentWorkspaceId()));
+    }
+
+    private long currentWorkspaceId() {
+        Long workspaceId = RequestContext.get().getCurrentWorkspaceId();
+        if (workspaceId == null) {
+            throw new BizException(ErrorCode.WORKSPACE_NOT_MEMBER);
+        }
+        return workspaceId;
+    }
+}

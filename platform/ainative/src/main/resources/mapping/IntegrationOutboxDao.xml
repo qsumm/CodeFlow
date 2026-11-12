@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ainative.integration.common.IntegrationOutboxDao">
+    <insert id="insert" parameterType="com.ainative.integration.common.IntegrationOutboxDO"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO integration_outbox (tenant_id, provider, binding_id, workitem_id, event_type,
+            payload_json, operation_key, lock_version,
+            status, retry_count, next_retry_at, last_error)
+        VALUES (#{tenantId}, #{provider}, #{bindingId}, #{workitemId}, #{eventType},
+            #{payloadJson}, #{operationKey}, #{lockVersion},
+            #{status}, #{retryCount}, #{nextRetryAt}, #{lastError})
+    </insert>
+    <select id="findById" resultType="com.ainative.integration.common.IntegrationOutboxDO">
+        SELECT * FROM integration_outbox WHERE id = #{id} LIMIT 1
+    </select>
+    <select id="findByOperation" resultType="com.ainative.integration.common.IntegrationOutboxDO">
+        SELECT * FROM integration_outbox
+        WHERE tenant_id = #{tenantId} AND provider = #{provider}
+          AND binding_id = #{bindingId} AND operation_key = #{operationKey}
+        LIMIT 1
+    </select>
+    <select id="listPending" resultType="com.ainative.integration.common.IntegrationOutboxDO">
+        SELECT * FROM integration_outbox
+        WHERE provider = #{provider}
+          AND (status = 'PENDING' OR (status = 'FAILED' AND next_retry_at &lt;= NOW(3)))
+        ORDER BY id ASC LIMIT #{limit}
+    </select>
+    <select id="listPendingAny" resultType="com.ainative.integration.common.IntegrationOutboxDO">
+        SELECT * FROM integration_outbox
+        WHERE status = 'PENDING' OR (status = 'FAILED' AND next_retry_at &lt;= NOW(3))
+        ORDER BY id ASC LIMIT #{limit}
+    </select>
+    <select id="listPendingExcludingProvider" resultType="com.ainative.integration.common.IntegrationOutboxDO">
+        SELECT * FROM integration_outbox
+        WHERE provider != #{provider}
+          AND (status = 'PENDING' OR (status = 'FAILED' AND next_retry_at &lt;= NOW(3)))
+        ORDER BY id ASC LIMIT #{limit}
+    </select>
+    <select id="listRecoveryCandidates" resultType="com.ainative.integration.common.IntegrationOutboxDO">
+        SELECT * FROM integration_outbox
+        WHERE (status = 'SENDING' OR (status = 'UNKNOWN' AND event_type = 'COMMENT_CREATE'))
+          AND gmt_modified &lt;= #{before}
+        ORDER BY gmt_modified ASC, id ASC LIMIT #{limit}
+    </select>
+    <update id="markSending">
+        UPDATE integration_outbox
+        SET status = 'SENDING', lock_version = lock_version + 1,
+            last_error = NULL, next_retry_at = NULL
+        WHERE id = #{id} AND lock_version = #{expectedLockVersion}
+          AND (status = 'PENDING' OR (status = 'FAILED' AND next_retry_at &lt;= NOW(3)))
+    </update>
+    <update id="takeoverForRecovery">
+        UPDATE integration_outbox
+        SET status = 'UNKNOWN', lock_version = lock_version + 1, next_retry_at = NULL
+        WHERE id = #{id} AND lock_version = #{expectedLockVersion}
+          AND status IN ('SENDING', 'UNKNOWN') AND gmt_modified &lt;= #{before}
+    </update>
+    <update id="markSucceeded">
+        UPDATE integration_outbox
+        SET status = 'SUCCEEDED', last_error = NULL, next_retry_at = NULL
+        WHERE id = #{id} AND lock_version = #{lockVersion} AND status IN ('SENDING', 'UNKNOWN')
+    </update>
+    <update id="markUnknown">
+        UPDATE integration_outbox
+        SET status = 'UNKNOWN', last_error = #{lastError}, next_retry_at = NULL
+        WHERE id = #{id} AND lock_version = #{lockVersion} AND status IN ('SENDING', 'UNKNOWN')
+    </update>
+    <update id="markFailed">
+        UPDATE integration_outbox
+        SET status = 'FAILED', retry_count = retry_count + 1, last_error = #{lastError},
+            next_retry_at =
+            <choose>
+                <when test="retryable">
+                    DATE_ADD(NOW(3), INTERVAL LEAST(300, POW(2, LEAST(retry_count + 1, 9))) SECOND)
+                </when>
+                <otherwise>NULL</otherwise>
+            </choose>
+        WHERE id = #{id} AND lock_version = #{lockVersion} AND status = 'SENDING'
+    </update>
+    <update id="requeueAfterNotFound">
+        UPDATE integration_outbox
+        SET status = 'PENDING', last_error = NULL, next_retry_at = NULL
+        WHERE id = #{id} AND lock_version = #{lockVersion} AND status = 'UNKNOWN'
+    </update>
+    <update id="manualRetry">
+        UPDATE integration_outbox
+        SET status = 'PENDING', lock_version = lock_version + 1,
+            retry_count = 0, next_retry_at = NULL
+        WHERE id = #{id} AND tenant_id = #{tenantId} AND lock_version = #{expectedLockVersion}
+          AND (status = 'UNKNOWN' OR (status = 'FAILED' AND next_retry_at IS NULL))
+    </update>
+    <update id="manualConfirmSucceeded">
+        UPDATE integration_outbox
+        SET status = 'SUCCEEDED', lock_version = lock_version + 1,
+            last_error = NULL, next_retry_at = NULL
+        WHERE id = #{id} AND tenant_id = #{tenantId} AND lock_version = #{expectedLockVersion}
+          AND (status = 'UNKNOWN' OR (status = 'FAILED' AND next_retry_at IS NULL))
+    </update>
+</mapper>

@@ -1,0 +1,224 @@
+package com.ainative.agent;
+
+import com.ainative.common.error.BizException;
+import com.ainative.common.error.ErrorCode;
+import com.ainative.common.result.Result;
+import com.ainative.context.RequestContext;
+import com.ainative.access.WorkspaceAccessLevel;
+import com.ainative.access.RequireWorkspaceAccess;
+import com.ainative.agent.dto.AgentVO;
+import com.ainative.agent.dto.AgentVersionSummaryVO;
+import com.ainative.agent.dto.AgentVersionVO;
+import com.ainative.agent.dto.CreateAgentRequest;
+import com.ainative.agent.dto.MemoryRefRequest;
+import com.ainative.agent.dto.MemoryRefVO;
+import com.ainative.agent.dto.RepoPermRequest;
+import com.ainative.agent.dto.ReviewRequest;
+import com.ainative.agent.dto.RollbackRequest;
+import com.ainative.agent.dto.SkillRequest;
+import com.ainative.agent.dto.UpdateConfigRequest;
+import com.ainative.agent.dto.UpdateAgentRequest;
+import com.ainative.squad.SquadService;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/agents")
+@RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_ONLY, action = "查看智能体", actionKey = "access.action.view_agents")
+public class AgentController {
+
+    private final AgentService agentService;
+    private final SquadService squadService;
+
+    public AgentController(AgentService agentService, SquadService squadService) {
+        this.agentService = agentService;
+        this.squadService = squadService;
+    }
+
+    @PostMapping
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "创建智能体", actionKey = "access.action.create_an_agent")
+    public Result<AgentVO> create(@RequestBody CreateAgentRequest req) {
+        return Result.ok(agentService.create(req, currentWorkspaceId(), currentUserId()));
+    }
+
+    @GetMapping("/{id}")
+    public Result<AgentVO> get(@PathVariable("id") Long id) {
+        return Result.ok(agentService.get(id, currentWorkspaceId()));
+    }
+
+    @DeleteMapping("/{id}")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "删除智能体", actionKey = "access.action.delete_an_agent")
+    public Result<Void> delete(@PathVariable("id") Long id) {
+        agentService.delete(id, currentWorkspaceId(), currentUserId());
+        return Result.ok(null);
+    }
+
+    @PatchMapping("/{id}")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "更新智能体", actionKey = "access.action.update_an_agent")
+    public Result<AgentVO> update(@PathVariable("id") Long id, @RequestBody UpdateAgentRequest req) {
+        req.setId(id);
+        return Result.ok(agentService.updateAgent(req, currentWorkspaceId(), currentUserId()));
+    }
+
+    @GetMapping
+    public Result<List<AgentVO>> list(
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "kind", required = false) String kind,
+            @RequestParam(value = "squadIds", required = false) List<Long> squadIds,
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        return Result.ok(agentService.list(currentWorkspaceId(), status, kind, squadIds, page, size));
+    }
+
+    @GetMapping("/reviews/count")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "查看待审核数量", actionKey = "access.action.view_the_pending_review_count")
+    public Result<Long> countPendingReviews() {
+        return Result.ok(agentService.countPendingReviews(currentWorkspaceId()));
+    }
+
+    @PutMapping("/{id}/config")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "编辑智能体配置", actionKey = "access.action.edit_agent_configuration")
+    public Result<AgentVersionVO> editConfig(@PathVariable("id") Long id, @RequestBody UpdateConfigRequest req) {
+        return Result.ok(agentService.editConfig(id, req, currentWorkspaceId(), currentUserId()));
+    }
+
+    @PostMapping("/{id}/submit")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "提交智能体审核", actionKey = "access.action.submit_an_agent_for_review")
+    public Result<AgentVO> submit(@PathVariable("id") Long id) {
+        return Result.ok(agentService.submit(id, currentWorkspaceId(), currentUserId()));
+    }
+
+    @PostMapping("/{id}/approve")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "通过智能体审核", actionKey = "access.action.approve_an_agent_review")
+    public Result<AgentVO> approve(@PathVariable("id") Long id, @RequestBody ReviewRequest req) {
+        return Result.ok(agentService.approve(id, currentWorkspaceId(), currentUserId(), req.getComment()));
+    }
+
+    @PostMapping("/{id}/reject")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "驳回智能体审核", actionKey = "access.action.reject_an_agent_review")
+    public Result<AgentVO> reject(@PathVariable("id") Long id, @RequestBody ReviewRequest req) {
+        return Result.ok(agentService.reject(id, currentWorkspaceId(), currentUserId(), req.getComment()));
+    }
+
+    @PostMapping("/{id}/rollback")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "回滚智能体版本", actionKey = "access.action.roll_back_an_agent_version")
+    public Result<AgentVO> rollback(@PathVariable("id") Long id, @RequestBody RollbackRequest req) {
+        return Result.ok(agentService.rollback(id, req.getVersionNo(), currentWorkspaceId(), currentUserId()));
+    }
+
+    @PostMapping("/{id}/offline")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "下线智能体", actionKey = "access.action.take_an_agent_offline")
+    public Result<AgentVO> offline(@PathVariable("id") Long id) {
+        return Result.ok(agentService.offline(id, currentWorkspaceId(), currentUserId()));
+    }
+
+    @PostMapping("/{id}/online")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "上线智能体", actionKey = "access.action.bring_an_agent_online")
+    public Result<AgentVO> online(@PathVariable("id") Long id) {
+        return Result.ok(agentService.online(id, currentWorkspaceId(), currentUserId()));
+    }
+
+    @GetMapping("/{id}/versions")
+    public Result<List<AgentVersionSummaryVO>> listVersions(@PathVariable("id") Long id) {
+        return Result.ok(agentService.listVersions(id, currentWorkspaceId()));
+    }
+
+    @GetMapping("/{id}/versions/{versionNo}")
+    public Result<AgentVersionVO> getVersion(@PathVariable("id") Long id, @PathVariable("versionNo") Integer versionNo) {
+        return Result.ok(agentService.getVersion(id, versionNo, currentWorkspaceId()));
+    }
+
+    @PostMapping("/{id}/repos")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "添加智能体仓库权限", actionKey = "access.action.add_agent_repository_access")
+    public Result<Void> addRepoPerm(@PathVariable("id") Long id, @RequestBody RepoPermRequest req) {
+        agentService.addRepoPerm(id, req, currentWorkspaceId(), currentUserId());
+        return Result.ok(null);
+    }
+
+    @DeleteMapping("/{id}/repos/{repoId}")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "移除智能体仓库权限", actionKey = "access.action.remove_agent_repository_access")
+    public Result<Void> removeRepoPerm(@PathVariable("id") Long id, @PathVariable("repoId") Long repoId) {
+        agentService.removeRepoPerm(id, repoId, currentWorkspaceId(), currentUserId());
+        return Result.ok(null);
+    }
+
+    @PostMapping("/{id}/skills")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "添加智能体技能", actionKey = "access.action.add_an_agent_skill")
+    public Result<Void> addSkill(@PathVariable("id") Long id, @RequestBody SkillRequest req) {
+        agentService.addSkill(id, req, currentWorkspaceId(), currentUserId());
+        return Result.ok(null);
+    }
+
+    @DeleteMapping("/{id}/skills/{skillId}")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "移除智能体技能", actionKey = "access.action.remove_an_agent_skill")
+    public Result<Void> removeSkill(@PathVariable("id") Long id, @PathVariable("skillId") Long skillId) {
+        agentService.removeSkill(id, skillId, currentWorkspaceId(), currentUserId());
+        return Result.ok(null);
+    }
+
+    @PostMapping("/{id}/memories")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "添加智能体记忆", actionKey = "access.action.add_agent_memory")
+    public Result<Void> addMemoryRef(@PathVariable("id") Long id, @RequestBody MemoryRefRequest req) {
+        agentService.addMemoryRef(id, req, currentWorkspaceId(), currentUserId());
+        return Result.ok(null);
+    }
+
+    @DeleteMapping("/{id}/memories/{memoryId}")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "移除智能体记忆", actionKey = "access.action.remove_agent_memory")
+    public Result<Void> removeMemoryRef(@PathVariable("id") Long id, @PathVariable("memoryId") Long memoryId) {
+        agentService.removeMemoryRef(id, memoryId, currentWorkspaceId(), currentUserId());
+        return Result.ok(null);
+    }
+
+    @GetMapping("/{id}/memories")
+    public Result<List<MemoryRefVO>> listMemories(@PathVariable("id") Long id) {
+        return Result.ok(agentService.listMemoryRefs(id));
+    }
+
+    @PostMapping("/{id}/environment-variables/{environmentVariableId}")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "挂载智能体环境变量", actionKey = "access.action.mount_agent_environment_variables")
+    public Result<Void> addEnvironmentVariableRef(@PathVariable("id") Long id,
+                                                   @PathVariable("environmentVariableId") Long environmentVariableId) {
+        agentService.addEnvironmentVariableRef(id, environmentVariableId, currentWorkspaceId(), currentUserId());
+        return Result.ok(null);
+    }
+
+    @DeleteMapping("/{id}/environment-variables/{environmentVariableId}")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "解绑智能体环境变量", actionKey = "access.action.unmount_agent_environment_variables")
+    public Result<Void> removeEnvironmentVariableRef(@PathVariable("id") Long id,
+                                                      @PathVariable("environmentVariableId") Long environmentVariableId) {
+        agentService.removeEnvironmentVariableRef(id, environmentVariableId, currentWorkspaceId(), currentUserId());
+        return Result.ok(null);
+    }
+
+    @GetMapping("/{id}/squads")
+    public Result<List<Long>> listSquads(@PathVariable("id") Long id) {
+        return Result.ok(squadService.listSquadsByAgent(id));
+    }
+
+    private long currentUserId() {
+        Long uid = RequestContext.get().getUserId();
+        if (uid == null) {
+            throw new BizException(ErrorCode.UNAUTHORIZED);
+        }
+        return uid;
+    }
+
+    private long currentWorkspaceId() {
+        Long workspaceId = RequestContext.get().getCurrentWorkspaceId();
+        if (workspaceId == null) {
+            throw new BizException(ErrorCode.WORKSPACE_NOT_MEMBER);
+        }
+        return workspaceId;
+    }
+}

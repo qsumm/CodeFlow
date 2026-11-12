@@ -1,0 +1,104 @@
+package com.ainative.conversation;
+
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import java.util.Date;
+import java.util.List;
+
+@Mapper
+public interface AgentConversationTurnDao {
+    int insert(AgentConversationTurnDO row);
+
+    List<AgentConversationTurnDO> listActiveWorkflowTurns(@Param("afterId") long afterId,
+            @Param("limit") int limit);
+
+    AgentConversationTurnDO findByExternalMsgId(@Param("tenantId") Long tenantId,
+            @Param("externalMsgId") String externalMsgId);
+
+    AgentConversationTurnDO findByConversationTurn(@Param("tenantId") Long tenantId,
+            @Param("conversationId") Long conversationId, @Param("id") Long id);
+
+    AgentConversationTurnDO findByConversationTurnForUpdate(@Param("tenantId") Long tenantId,
+            @Param("conversationId") Long conversationId, @Param("id") Long id);
+
+    AgentConversationTurnDO findProcessingInbound(@Param("tenantId") Long tenantId,
+            @Param("conversationId") Long conversationId);
+
+    AgentConversationTurnDO findNextQueuedInbound(@Param("tenantId") Long tenantId,
+            @Param("conversationId") Long conversationId);
+
+    List<AgentConversationTurnDO> listQueuedInboundAfter(@Param("afterId") long afterId,
+            @Param("limit") int limit);
+
+    List<AgentConversationTurnDO> listStaleProcessingInboundAfter(@Param("cutoff") Date cutoff,
+            @Param("afterId") long afterId, @Param("limit") int limit);
+
+    List<AgentConversationTurnDO> listStaleProcessingInboundByExecutor(
+            @Param("tenantId") Long tenantId, @Param("executorId") Long executorId,
+            @Param("cutoff") Date cutoff, @Param("limit") int limit);
+
+    List<AgentConversationTurnDO> listStaleProcessingInbound(
+            @Param("cutoff") Date cutoff, @Param("limit") int limit);
+
+    Integer acquireConversationLock(@Param("lockName") String lockName,
+            @Param("timeoutSeconds") int timeoutSeconds);
+
+    Integer releaseConversationLock(@Param("lockName") String lockName);
+
+    int updateStatus(@Param("tenantId") Long tenantId, @Param("id") Long id,
+            @Param("status") String status, @Param("error") String error);
+
+    int updateInboundStatusIfProcessingAttempt(@Param("tenantId") Long tenantId,
+            @Param("conversationId") Long conversationId, @Param("id") Long id,
+            @Param("status") String status, @Param("error") String error,
+            @Param("dispatchAttempt") int dispatchAttempt);
+
+    int updateInboundStatusIfProcessing(@Param("tenantId") Long tenantId,
+            @Param("conversationId") Long conversationId, @Param("id") Long id,
+            @Param("status") String status, @Param("error") String error);
+
+    int updateStatusIfCurrent(@Param("tenantId") Long tenantId, @Param("id") Long id,
+            @Param("fromStatus") String fromStatus, @Param("toStatus") String toStatus,
+            @Param("error") String error);
+
+    int updateInboundStatusAndContextIfProcessing(@Param("tenantId") Long tenantId,
+            @Param("conversationId") Long conversationId, @Param("id") Long id,
+            @Param("status") String status, @Param("error") String error,
+            @Param("sourceContext") String sourceContext);
+
+    int updateStatusAndContextIfCurrent(@Param("tenantId") Long tenantId, @Param("id") Long id,
+            @Param("fromStatus") String fromStatus, @Param("toStatus") String toStatus,
+            @Param("error") String error, @Param("sourceContext") String sourceContext);
+
+    int updateProcessingSourceContext(@Param("tenantId") Long tenantId, @Param("id") Long id,
+            @Param("previousContext") String previousContext, @Param("sourceContext") String sourceContext);
+
+    int recordDispatchAttemptIfProcessing(@Param("tenantId") Long tenantId,
+            @Param("conversationId") Long conversationId, @Param("id") Long id);
+
+    int claimStaleDispatchAttemptIfProcessing(@Param("tenantId") Long tenantId,
+            @Param("conversationId") Long conversationId, @Param("id") Long id,
+            @Param("cutoff") Date cutoff);
+
+    List<AgentConversationTurnDO> listTurnsByConversation(
+            @Param("tenantId") Long tenantId,
+            @Param("conversationId") Long conversationId);
+
+    AgentConversationTurnDO findDeliveryTurn(@Param("id") Long id);
+
+    List<Long> listDueDeliveryTurnIds(@Param("limit") int limit);
+
+    int claimPendingDelivery(@Param("id") Long id, @Param("leaseUntil") Date leaseUntil);
+
+    int claimExpiredDelivery(@Param("id") Long id, @Param("leaseUntil") Date leaseUntil,
+            @Param("maxAttempts") int maxAttempts,
+            @Param("retryWindowStart") Date retryWindowStart);
+
+    int finishDelivery(@Param("id") Long id, @Param("attempt") int attempt,
+            @Param("status") String status, @Param("error") String error,
+            @Param("availableAt") Date availableAt);
+
+    int expireUnconfirmedDelivery(@Param("id") Long id, @Param("error") String error);
+
+    int cancelUndeliverableDelivery(@Param("id") Long id, @Param("error") String error);
+}

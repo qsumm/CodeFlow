@@ -1,0 +1,11 @@
+.insight-kpi-container { container-type: inline-size; }
+.insight-kpi-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@container (min-width: 600px) {
+  .insight-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.insight-kpi { text-align: left; min-width: 0; padding: 14px 16px 13px; border: 1px solid var(--cf-border); border-radius: 10px; background: var(--cf-panel); color: var(--cf-text); }
+.insight-kpi[role="button"]:hover { background: var(--cf-raised); }
+.insight-kpi[role="button"]:focus-visible { outline: 2px solid var(--cf-accent-text); outline-offset: 2px; }
+.insight-kpi-label { font-size: 12px; line-height: 1.5; color: var(--cf-muted); margin-bottom: 8px; }
+.insight-kpi-value { color: var(--cf-accent-text); font-size: clamp(20px, 2.1vw, 26px); font-weight: 600; line-height: 1.3; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.insight-kpi-hint { margin-top: 6px; font-size: 11px; line-height: 1.5; color: var(--cf-muted); white-space: nowrap; }

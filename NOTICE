@@ -1,0 +1,12 @@
+CodeFlow
+Copyright 2026 The CodeFlow Authors
+
+This product includes third-party software, including:
+- Spring Boot / Spring Framework / Spring Security Crypto (Apache-2.0)
+- React / React DOM / Ant Design / @ant-design/icons (MIT)
+- TipTap / ProseMirror / Zustand / i18next / axios / dayjs (MIT)
+- ECharts / @antv/g6 (MIT / Apache-2.0), Mermaid (MIT)
+- MySQL Connector/J (GPL-2.0 with Universal FOSS Exception; runtime DB driver)
+- Dropwizard Metrics / OkHttp / Gson / AWS SDK for Java (Apache-2.0), jedis (MIT)
+- Python standard library only (runtime/)
+Full license texts are available from the respective upstream distributions.

@@ -1,0 +1,270 @@
+/* 澄清面板保留紧凑正文尺度，色值与公共 MarkdownView 共用外观令牌。 */
+.cf-clarify-md pre {
+  background-color: var(--cf-raised);
+  border: 1px solid var(--cf-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  overflow-x: auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.cf-clarify-md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* 代码块内的 code 不再叠一层底色，字重也退回常规——加粗只服务于正文里的内联 code */
+.cf-clarify-md pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  font-weight: normal;
+}
+
+.cf-clarify-md blockquote {
+  margin: 8px 0;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--cf-border);
+  color: var(--cf-muted);
+}
+
+.cf-clarify-md table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.cf-clarify-md th,
+.cf-clarify-md td {
+  border: 1px solid var(--cf-border);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.cf-clarify-md th {
+  background-color: var(--cf-raised);
+  font-weight: 600;
+  text-align: center;
+}
+
+.cf-clarify-md p:first-child {
+  margin-top: 0;
+}
+
+.cf-clarify-md p:last-child {
+  margin-bottom: 0;
+}
+
+/* 每条消息的操作位：鼠标下 hover 才显形，保持面板克制。
+   line-height: 0 与下面的 18px 见方是一套：antd size="small" 按钮默认 24px，而
+   AI 侧的数字人名字行字号只有 11px、实测行高 15px，直接塞进去每条 AI 消息都会
+   +9px，而且 opacity:0 时照样占布局。约束成 18px 后行高只 +2px。 */
+.cf-clarify-msg-actions {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  line-height: 0;
+}
+
+.cf-clarify-msg:hover .cf-clarify-msg-actions {
+  opacity: 1;
+}
+
+/* opacity:0 的按钮仍可被 Tab 聚焦，聚焦却看不见就是 a11y bug。 */
+.cf-clarify-msg-actions:focus-within {
+  opacity: 1;
+}
+
+.cf-clarify-msg-actions .ant-btn {
+  height: 18px;
+  width: 18px;
+  min-width: 18px;
+  font-size: 11px;
+}
+
+/* 触屏没有 hover，不兜底的话这个功能永久不可见。 */
+@media (hover: none) {
+  .cf-clarify-msg-actions {
+    opacity: 1;
+  }
+
+  /* 18px 低于 WCAG 2.5.8 要求的 24×24 最小目标尺寸。触屏上按钮本来就常显、
+     且用手指点，这里放开到 24px 换取合规命中区；鼠标端仍留 18px，免得把
+     11px 的数字人名字行撑高。必须排在上面那条 18px 规则之后：两者选择器
+     特异性相同，媒体查询不加权，只有靠源码顺序才能覆盖。 */
+  .cf-clarify-msg-actions .ant-btn {
+    height: 24px;
+    width: 24px;
+    min-width: 24px;
+  }
+}
+
+.cf-clarification-panel { min-width: 0; color: var(--cf-text); background: var(--cf-panel); }
+.cf-clarification-panel .cf-clarify-md { font-size: 16px; line-height: 1.8; overflow-wrap: anywhere; }
+.cf-clarification-panel textarea.ant-input { font-size: 16px; line-height: 1.7; padding: 12px; background: var(--cf-field); }
+.cf-clarification-panel summary { line-height: 1.7; }
+.cf-clarification-panel.is-fullscreen > :first-child { background: var(--cf-raised); }
+
+.cf-clarification-panel .cf-clarify-thinking .cf-clarify-md { font-size: 15px; }
+
+/* 问题卡片动效（工单 56330）：出现 / 消失 / 收起 / 展开用同一套轻量风格。
+   这些类只由澄清面板（collapsible）渲染出的卡片挂上，其他两处复用不受影响。 */
+.cf-elicitation-card {
+  animation: cf-elicitation-card-in 180ms ease-out;
+}
+
+/* 答完/跳过后的淡出：父级在 CLARIFICATION_CARD_DISMISS_MS 内保留卡片，期间不可交互。 */
+.cf-elicitation-card.is-dismissing {
+  animation: cf-elicitation-card-out 160ms ease-out forwards;
+  pointer-events: none;
+}
+
+/* 展开时题目区随高度展开一起淡入，与收起的高度折叠方向对称。 */
+.cf-elicitation-body {
+  animation: cf-elicitation-body-in 180ms ease-out;
+}
+
+/* 箭头轻量旋转反馈：展开态朝上（可收起），收起态朝下（可展开）。 */
+.cf-elicitation-toggle .cf-elicitation-chevron {
+  transition: transform 180ms ease-out;
+}
+
+.cf-elicitation-toggle[aria-expanded='true'] .cf-elicitation-chevron {
+  transform: rotate(180deg);
+}
+
+@keyframes cf-elicitation-card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes cf-elicitation-card-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(6px); }
+}
+
+@keyframes cf-elicitation-body-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.cf-clarify-artifact-browser {
+  position: fixed;
+  top: 12px;
+  right: 0;
+  bottom: 12px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--cf-border);
+  border-right: 0;
+  border-radius: 12px 0 0 12px;
+  background: var(--cf-panel);
+  box-shadow: -16px 0 48px rgba(24, 35, 53, .12);
+}
+
+.cf-clarify-artifact-browser.is-maximized {
+  top: 0;
+  bottom: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.cf-clarify-artifact-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--cf-border);
+  background: var(--cf-panel);
+}
+
+.cf-clarify-artifact-header > * {
+  min-width: 0;
+}
+
+.cf-clarify-artifact-actions {
+  flex-shrink: 0;
+}
+
+.cf-clarify-artifact-actions .ant-btn:focus-visible {
+  outline: 2px solid var(--cf-accent-text);
+  outline-offset: 2px;
+}
+
+.cf-clarify-artifact-address {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--cf-muted);
+}
+
+.cf-clarify-artifact-address > span {
+  overflow: hidden;
+  padding: 5px 10px;
+  border: 1px solid var(--cf-border);
+  border-radius: 6px;
+  background: var(--cf-raised);
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cf-clarify-artifact-body {
+  flex: 1;
+  min-height: 0;
+  background: var(--cf-panel);
+}
+
+.cf-clarify-artifact-browser .file-preview-content {
+  height: 100%;
+  max-height: none;
+}
+
+.cf-clarify-artifact-browser .file-preview-content > iframe,
+.cf-clarify-artifact-browser .file-preview-content > object,
+.cf-clarify-artifact-browser .file-preview-content > img,
+.cf-clarify-artifact-browser .file-preview-content > video {
+  height: 100%;
+  max-height: none;
+}
+
+.cf-clarify-artifact-browser .file-preview-text,
+.cf-clarify-artifact-browser .file-preview-markdown {
+  padding: 20px 24px;
+}
+
+@media (max-width: 640px) {
+  .cf-clarify-artifact-browser:not(.is-maximized) {
+    top: 0;
+    bottom: 0;
+    width: 100vw !important;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .cf-clarify-artifact-browser [data-testid='resize-handle-horizontal'] {
+    display: none;
+  }
+}
+
+/* 平台设计要求：系统开启「减少动画」偏好时全部动画与过渡禁用，瞬时呈现。 */
+@media (prefers-reduced-motion: reduce) {
+  .cf-elicitation-card,
+  .cf-elicitation-card.is-dismissing,
+  .cf-elicitation-body {
+    animation: none;
+  }
+
+  .cf-elicitation-toggle .cf-elicitation-chevron {
+    transition: none;
+  }
+}

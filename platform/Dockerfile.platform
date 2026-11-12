@@ -1,0 +1,13 @@
+FROM eclipse-temurin:21-jre-jammy
+
+RUN groupadd --system ainative && \
+    useradd --system --gid ainative --home /app ainative && \
+    install -d -o ainative -g ainative /app/logs
+
+WORKDIR /app
+COPY ainative/target/ainative.jar /app/ainative.jar
+
+USER ainative
+EXPOSE 7001
+
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/ainative.jar"]

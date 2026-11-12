@@ -1,0 +1,14 @@
+.cf-markdown { color: var(--cf-text); }
+.cf-markdown pre { background: var(--cf-raised); border: 1px solid var(--cf-border); border-radius: 8px; padding: 12px; }
+.cf-markdown code { background: var(--cf-raised); border-radius: 4px; padding: 1px 4px; }
+.cf-markdown pre code { background: transparent; padding: 0; }
+.cf-markdown blockquote { border-left: 3px solid var(--cf-border); color: var(--cf-muted); padding-left: 12px; }
+.cf-markdown table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+.cf-markdown th, .cf-markdown td { border: 1px solid var(--cf-border); padding: 6px 10px; }
+.cf-markdown th { background: var(--cf-raised); text-align: center; }
+.cf-markdown a { color: var(--cf-accent-text); }
+.cf-markdown img { max-width: 100%; height: auto; }
+.cf-markdown hr { border: 0; border-top: 1px solid var(--cf-border); }
+.cf-markdown ul.contains-task-list { list-style: none; padding-left: 1.4em; }
+.cf-markdown li.task-list-item { list-style: none; }
+.cf-markdown li.task-list-item > input { margin-right: .4em; }

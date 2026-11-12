@@ -1,0 +1,66 @@
+.cf-chief { position: fixed; z-index: 999; color: var(--cf-text); }
+/* Inactive launcher yields to fullscreen/modal surfaces; an opened assistant remains an overlay. */
+.cf-chief.cf-chief-open { z-index: 1050; }
+.cf-chief-launch { display: flex; align-items: center; justify-content: flex-end; gap: 4px; transition: transform .24s ease; }
+.cf-chief-launch.cf-chief-tucked { transform: translateX(calc(100% - 14px)); }
+.cf-chief-launch.cf-chief-tucked:hover, .cf-chief-launch.cf-chief-tucked:focus-within { transform: none; }
+.cf-chief-grip { cursor: grab; touch-action: none; user-select: none; padding: 8px 5px; color: var(--cf-muted); border-radius: 6px; opacity: .5; transition: opacity .18s ease, color .18s ease, background .18s ease; }
+.cf-chief-grip:hover { background: var(--cf-glass); color: var(--cf-text); opacity: 1; }
+.cf-chief-puck { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 1px solid rgba(var(--cf-accent-rgb), .45); border-radius: 50%; background: var(--cf-panel); color: var(--cf-text); cursor: grab; touch-action: none; user-select: none; box-shadow: 0 2px 8px #0002; transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease; }
+.cf-chief-puck:active { cursor: grabbing; }
+.cf-chief-puck:hover { border-color: var(--cf-accent); transform: translateY(-1px); box-shadow: 0 3px 12px #0003; }
+.cf-chief-icon { display: block; flex: none; }
+.cf-chief-dock { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 40px; padding: 0; border: 0; border-radius: 8px; background: var(--cf-glass); color: var(--cf-muted); cursor: pointer; touch-action: none; opacity: .62; transition: opacity .18s ease, color .18s ease, border-radius .24s ease; }
+.cf-chief-dock:hover { color: var(--cf-text); opacity: 1; }
+.cf-chief-tucked .cf-chief-dock { border-radius: 8px 0 0 8px; }
+.cf-chief-panel { position: absolute; right: 0; bottom: 48px; display: flex; flex-direction: column; background: var(--cf-panel); border: 1px solid var(--cf-border); border-radius: 12px; box-shadow: 0 8px 36px #0002; overflow: hidden; resize: both; min-width: 340px; min-height: min(400px, calc(100dvh - 84px)); max-width: min(90vw, calc(100vw - 24px)); max-height: min(90dvh, calc(100dvh - 64px)); }
+.cf-chief-panel.cf-chief-expanded { position: fixed; inset: 4vh 2vw; max-width: none; max-height: none; min-width: 0; min-height: 0; border-radius: 14px; animation: cf-chief-wide-in 160ms ease-out; }
+.cf-chief-expanded .cf-chief-header { cursor: default; touch-action: auto; }
+@keyframes cf-chief-wide-in { from { opacity: .6; transform: scale(.985); } to { opacity: 1; transform: none; } }
+.cf-chief-body-inner { min-width: 0; }
+.cf-chief-composer-inner { min-width: 0; }
+.cf-chief-expanded .cf-chief-body { padding: 20px 24px; }
+.cf-chief-expanded .cf-chief-body-inner, .cf-chief-expanded .cf-chief-composer-inner { width: 100%; max-width: 880px; margin: 0 auto; }
+.cf-chief-header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--cf-border); cursor: move; touch-action: none; user-select: none; }
+.cf-chief-header > .cf-chief-icon { flex: none; }
+.cf-chief-tools { display: flex; margin-left: auto; }
+.cf-chief-secondary { color: var(--cf-muted); font-size: 12px; }
+.cf-chief-context { padding: 10px 16px; background: var(--cf-raised); display: flex; gap: 8px; justify-content: space-between; align-items: center; font-size: 12px; overflow-wrap: anywhere; }
+.cf-chief-body { overflow: auto; padding: 12px 16px; flex: 1; min-height: 0; }
+.cf-chief-body pre { font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cf-chief-message { margin: 12px 0; overflow-wrap: anywhere; }
+.cf-chief-user > p { background: rgba(var(--cf-accent-rgb), .09); padding: 10px 12px; border-radius: 8px; white-space: pre-wrap; }
+.cf-chief-plan { padding: 12px; border: 1px solid var(--cf-border); border-radius: 8px; margin-top: 12px; }
+.cf-chief-plan > .ant-tag { margin-left: 8px; }
+.cf-chief-composer { border-top: 1px solid var(--cf-border); padding: 12px 16px; }
+.cf-chief-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.cf-chief-check { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--cf-border); }
+.cf-chief-setup .ant-btn, .cf-chief-setup .ant-select { margin: 12px 8px 0 0; }
+.cf-chief-history { margin-top: 8px; height: auto; padding: 10px; display: flex; flex-direction: column; align-items: flex-start; white-space: normal; }
+.cf-chief-conversation-title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cf-chief-welcome { text-align: center; padding: 48px 12px; }
+.cf-chief-welcome > .cf-chief-icon { margin: 0 auto 8px; }
+@media(max-width:600px) {
+  .cf-chief-panel { width: calc(100vw - 24px)!important; min-width: 0; resize: none; }
+  .cf-chief-panel.cf-chief-expanded { width: auto!important; height: auto!important; inset: 0; border-radius: 0; resize: none; }
+}
+
+.cf-chief-message { padding: 10px 0; }
+.cf-chief-message-actions { display: flex; align-items: center; margin-top: 4px; opacity: .7; }
+.cf-chief-message-actions:hover { opacity: 1; }
+.cf-chief-user > p { margin-left: auto; max-width: 90%; border-radius: 14px; padding: 10px 14px; }
+.cf-chief-composer { padding: 10px 12px 12px; border-top: 0; }
+.cf-chief-input-shell { border: 1px solid var(--cf-border); border-radius: 16px; background: var(--cf-raised); overflow: hidden; padding: 8px; }
+.cf-chief-input-shell textarea.ant-input { border: 0; box-shadow: none; background: transparent; padding: 4px 6px; resize: none; }
+.cf-chief-input-shell textarea.ant-input:focus { box-shadow: none; }
+.cf-chief-input-tools { display: flex; align-items: center; gap: 8px; padding: 4px 2px 0; }
+.cf-chief-input-tools .cf-chief-send { margin-left: auto; }
+.cf-chief-images { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px; }
+.cf-chief-images img { width: 72px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--cf-border); }
+.cf-chief-image-draft { position: relative; }
+.cf-chief-image-draft button { position: absolute; top: -5px; right: -5px; background: var(--cf-panel); border-radius: 50%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cf-chief-launch, .cf-chief-grip, .cf-chief-puck, .cf-chief-dock { transition: none; }
+  .cf-chief-panel.cf-chief-expanded { animation: none; }
+}

@@ -1,0 +1,25 @@
+package com.ainative.scheduledtask.compat;
+
+import com.ainative.access.WorkspaceAccessLevel;
+import com.ainative.access.RequireWorkspaceAccess;
+import com.ainative.common.result.Result;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/capabilities/scheduled-task")
+@RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_ONLY, action = "查看定时任务能力", actionKey = "access.action.view_scheduled_task_capabilities")
+public class ScheduledTaskCapabilityController {
+
+    private final ScheduledTaskCapabilityGuard guard;
+
+    public ScheduledTaskCapabilityController(ScheduledTaskCapabilityGuard guard) {
+        this.guard = guard;
+    }
+
+    @GetMapping
+    public Result<ScheduledTaskCapabilityVO> get() {
+        return Result.ok(guard.snapshot());
+    }
+}

@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ainative.workspace.WorkspaceDao">
+    <insert id="insert" parameterType="com.ainative.workspace.WorkspaceDO"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO `org` (name, active_name_key, slug, description, background, owner_id, status, creator_id, is_deleted, version)
+        VALUES (#{name}, #{activeNameKey}, #{slug}, #{description}, #{background}, #{ownerId}, #{status}, #{creatorId}, 0, 0)
+    </insert>
+    <select id="findById" resultType="com.ainative.workspace.WorkspaceDO">
+        SELECT * FROM `org` WHERE id = #{id} AND is_deleted = 0 LIMIT 1
+    </select>
+    <select id="findByIdForUpdate" resultType="com.ainative.workspace.WorkspaceDO">
+        SELECT * FROM `org`
+        WHERE id = #{id} AND is_deleted = 0
+        LIMIT 1
+        FOR UPDATE
+    </select>
+    <!-- Name uniqueness moved from name to active_name_key (D2): a deleted row keeps its
+         name for the recycle bin but releases active_name_key to NULL, so this lookup
+         matches in-use workspaces only and still uses a unique index. -->
+    <select id="findByName" resultType="com.ainative.workspace.WorkspaceDO">
+        SELECT * FROM `org` WHERE active_name_key = #{name} LIMIT 1
+    </select>
+    <select id="findByIdAnyState" resultType="com.ainative.workspace.WorkspaceDO">
+        SELECT * FROM `org` WHERE id = #{id} LIMIT 1
+    </select>
+    <select id="countUsable" resultType="long">
+        SELECT COUNT(*) FROM `org`
+        WHERE id = #{id} AND is_deleted = 0 AND status = 0
+    </select>
+    <select id="listByUser" resultType="com.ainative.workspace.WorkspaceDO">
+        SELECT o.* FROM `org` o
+        INNER JOIN org_member m ON o.id = m.tenant_id
+        WHERE m.user_id = #{userId} AND m.status = 0
+          AND m.is_deleted = 0 AND o.is_deleted = 0
+        ORDER BY o.gmt_create DESC
+    </select>
+    <select id="listMembershipsByUser" resultType="com.ainative.workspace.WorkspaceMembershipDO">
+        SELECT o.id, o.name, o.description, o.owner_id, r.access_level, m.joined_at
+        FROM `org` o
+        INNER JOIN org_member m ON o.id = m.tenant_id
+        INNER JOIN workspace_role r ON r.id = m.role_id AND r.tenant_id = m.tenant_id AND r.is_deleted = 0
+        WHERE m.user_id = #{userId} AND m.status = 0
+          AND m.is_deleted = 0 AND o.is_deleted = 0
+        ORDER BY o.gmt_create DESC
+    </select>
+    <select id="countOwnedByUser" resultType="long">
+        SELECT COUNT(*) FROM `org`
+        WHERE owner_id = #{userId} AND is_deleted = 0
+    </select>
+    <update id="updateOwner">
+        UPDATE `org` SET owner_id = #{newOwnerId},
+            modifier_id = #{modifierId}, gmt_modified = NOW(3)
+        WHERE id = #{id} AND owner_id = #{oldOwnerId} AND is_deleted = 0
+    </update>
+    <update id="updateDetail">
+        UPDATE `org`
+        SET name = #{name},
+            active_name_key = #{activeNameKey},
+            description = #{description},
+            background = #{background},
+            modifier_id = #{modifierId},
+            version = version + 1,
+            gmt_modified = NOW(3)
+        WHERE id = #{id} AND is_deleted = 0 AND version = #{expectedVersion}
+    </update>
+    <!-- active_name_key is released in the same statement that flips is_deleted, so there
+         is no window where a deleted workspace still blocks its own name. -->
+    <update id="softDelete">
+        UPDATE `org`
+        SET is_deleted = 1,
+            active_name_key = NULL,
+            deleted_at = NOW(3),
+            deleted_by = #{deletedBy},
+            modifier_id = #{deletedBy},
+            version = version + 1,
+            gmt_modified = NOW(3)
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+    <update id="restore">
+        UPDATE `org`
+        SET is_deleted = 0,
+            name = #{name},
+            active_name_key = #{activeNameKey},
+            deleted_at = NULL,
+            deleted_by = NULL,
+            modifier_id = #{modifierId},
+            version = version + 1,
+            gmt_modified = NOW(3)
+        WHERE id = #{id} AND is_deleted = 1
+    </update>
+    <select id="countActiveByName" resultType="long">
+        SELECT COUNT(*) FROM `org`
+        WHERE active_name_key = #{name}
+        <if test="excludeId != null">AND id != #{excludeId}</if>
+    </select>
+    <!-- Caller must pass a non-empty collection: an empty IN () list is a SQL syntax error. -->
+    <select id="listActiveNames" resultType="string">
+        SELECT active_name_key FROM `org`
+        WHERE active_name_key IN
+        <foreach collection="names" item="candidate" open="(" separator="," close=")">#{candidate}</foreach>
+    </select>
+    <select id="listActive" resultType="com.ainative.workspace.WorkspaceDO">
+        SELECT * FROM `org` WHERE is_deleted = 0 ORDER BY id
+    </select>
+    <!-- Shared by listAllPaged/countAll so the page and its total always apply the same filter. -->
+    <sql id="allWorkspacesFilter">
+        WHERE is_deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND (name LIKE CONCAT('%', #{keyword}, '%')
+                 OR description LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </sql>
+    <select id="listAllPaged" resultType="com.ainative.workspace.WorkspaceDO">
+        SELECT * FROM `org`
+        <include refid="allWorkspacesFilter"/>
+        ORDER BY gmt_create DESC, id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+    <select id="countAll" resultType="long">
+        SELECT COUNT(*) FROM `org`
+        <include refid="allWorkspacesFilter"/>
+    </select>
+    <!--
+      跨空间复制的目标候选（与 allWorkspacesFilter 有意区分）：
+        - 只按名称匹配：描述命中的空间不进入候选；
+        - 排除源空间、已删除或停用空间；
+        - 普通用户要求目标角色 READ_WRITE/ADMIN（鉴权读 workspace_role，不看迁移保留的 org_member.access_level）；
+        - 平台管理员不加成员过滤，已有只读成员身份也不阻止其选择。
+      列表与总数共用本 fragment，条件漂移会让翻页出现空页。
+    -->
+    <sql id="copyTargetFilter">
+        WHERE o.is_deleted = 0 AND o.status = 0 AND o.id != #{sourceWorkspaceId}
+        <if test="keyword != null and keyword != ''">
+            AND o.name LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+        <if test="!systemAdmin">
+            AND EXISTS (SELECT 1 FROM org_member m
+                        JOIN workspace_role r ON r.id = m.role_id AND r.tenant_id = m.tenant_id AND r.is_deleted = 0
+                        WHERE m.tenant_id = o.id
+                          AND m.user_id = #{userId}
+                          AND m.status = 0
+                          AND m.is_deleted = 0
+                          AND r.access_level IN ('READ_WRITE', 'ADMIN'))
+        </if>
+    </sql>
+    <select id="listCopyTargets" resultType="com.ainative.workspace.WorkspaceDO">
+        SELECT o.* FROM `org` o
+        <include refid="copyTargetFilter"/>
+        ORDER BY o.gmt_create DESC, o.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+    <select id="countCopyTargets" resultType="long">
+        SELECT COUNT(*) FROM `org` o
+        <include refid="copyTargetFilter"/>
+    </select>
+    <!--
+      Recycle bin visibility (F4), decided entirely in SQL:
+        - original Owner  -> org.owner_id
+        - original ADMIN  -> still-active ADMIN row in org_member (members are preserved on delete)
+        - platform admin  -> sees everything, so the ownership predicate is dropped outright
+      The page and its total share this fragment; a drifting predicate would paginate to
+      empty pages exactly like the all-workspaces list would.
+    -->
+    <sql id="recycleBinFilter">
+        WHERE o.is_deleted = 1
+        <if test="!systemAdmin">
+            AND ( o.owner_id = #{userId}
+                  OR EXISTS (SELECT 1 FROM org_member m
+                             JOIN workspace_role r ON r.id = m.role_id AND r.tenant_id = m.tenant_id AND r.is_deleted = 0
+                             WHERE m.tenant_id = o.id
+                               AND m.user_id = #{userId}
+                               AND r.access_level = 'ADMIN'
+                               AND m.status = 0
+                               AND m.is_deleted = 0) )
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND o.name LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+    </sql>
+    <select id="pageRecycleBin" resultType="com.ainative.workspace.WorkspaceDO">
+        SELECT o.* FROM `org` o
+        <include refid="recycleBinFilter"/>
+        ORDER BY o.deleted_at DESC, o.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+    <select id="countRecycleBin" resultType="long">
+        SELECT COUNT(*) FROM `org` o
+        <include refid="recycleBinFilter"/>
+    </select>
+</mapper>

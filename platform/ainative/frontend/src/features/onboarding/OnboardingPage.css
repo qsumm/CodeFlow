@@ -1,0 +1,123 @@
+* { box-sizing: border-box; }
+:root {
+  --onb-bg:#fafbfc; --onb-ink:#111827; --onb-ink2:#475569; --onb-muted:#9ca3af;
+  --onb-accent:#0f62fe; --onb-line:#e5e9f0; --onb-ok:#0e9f6e;
+}
+.onb { min-height:100vh; background:var(--onb-bg); color:var(--onb-ink);
+       font-family:-apple-system,'PingFang SC','Segoe UI',sans-serif; }
+.wrap { max-width:880px; margin:0 auto; padding:0 40px 70px; }
+
+/* 顶部:极简一条 */
+.top { display:flex; align-items:center; padding:20px 0; border-bottom:1px solid var(--onb-line); }
+.brand { font-weight:800; font-size:17px; letter-spacing:.3px; }
+.brand em { color:var(--onb-accent); font-style:normal; }
+.pg { margin-left:auto; font-size:12px; color:var(--onb-muted); letter-spacing:1px; }
+
+/* 超大编号:编辑风视觉锚点 */
+.bignum {
+  font-size:150px; font-weight:800; line-height:.9; color:transparent;
+  -webkit-text-stroke:2px var(--onb-accent); letter-spacing:-6px; margin-top:34px;
+  font-family:Georgia,serif;
+}
+.bignum small { display:block; -webkit-text-stroke:0; color:var(--onb-accent); font-size:13px;
+                font-weight:700; letter-spacing:3px; font-family:inherit; margin-top:10px; }
+
+h1 { font-size:34px; font-weight:800; letter-spacing:-.5px; margin:18px 0 14px; }
+h1 mark { background:linear-gradient(transparent 62%, rgba(15,98,254,.18) 62%); color:inherit; }
+.lead { font-size:16px; line-height:1.8; color:var(--onb-ink2); max-width:560px; }
+
+/* 流水线:垂直编号清单,细线引导 */
+.flow { margin:36px 0 0; border-left:2px solid var(--onb-line); }
+.frow { display:flex; align-items:stretch; position:relative; padding:14px 0 14px 26px; }
+.frow::before { content:''; position:absolute; left:-7px; top:50%; width:12px; height:12px;
+  border-radius:50%; background:var(--onb-bg); border:2.5px solid var(--onb-accent); transform:translateY(-50%); }
+.frow .num { font-size:12px; font-weight:700; color:var(--onb-accent); width:30px; padding-top:3px; }
+.frow .t { font-size:15px; font-weight:650; width:150px; }
+.frow .d { font-size:13px; color:var(--onb-ink2); line-height:1.6; flex:1; padding-top:2px; }
+.tag2 { font-size:11px; color:var(--onb-ok); background:rgba(14,159,110,.08); border-radius:4px;
+        padding:2px 8px; height:fit-content; margin-top:4px; white-space:nowrap; }
+.tag2.human { color:var(--onb-accent); background:rgba(15,98,254,.07); }
+
+/* 关键认知:引用块 */
+.key { margin:34px 0 0; padding:20px 24px; background:#fff; border-left:3px solid var(--onb-accent);
+       border-radius:0 10px 10px 0; box-shadow:0 1px 4px rgba(17,24,39,.05); }
+.key .kt { font-size:11px; font-weight:700; letter-spacing:2px; color:var(--onb-accent); margin-bottom:8px; }
+.key p { font-size:14px; line-height:1.75; color:var(--onb-ink); }
+.key p b { background:linear-gradient(transparent 60%, rgba(15,98,254,.15) 60%); }
+
+/* 底部:编辑风导航 */
+.nav { display:flex; align-items:center; justify-content:space-between; margin-top:44px;
+       padding-top:20px; border-top:1px solid var(--onb-line); }
+.back { color:var(--onb-muted); font-size:13.5px; background:none; border:none; cursor:pointer; padding:8px 0; }
+.back:disabled { opacity:.35; cursor:default; }
+.next { display:inline-flex; align-items:center; gap:10px; color:var(--onb-accent); font-size:15px;
+        font-weight:700; background:none; border:none; cursor:pointer; padding:8px 0; }
+.next .circ { width:34px; height:34px; border-radius:50%; background:var(--onb-accent); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:15px; transition:.2s; }
+.next:hover .circ { transform:translateX(4px); }
+.later { margin-top:26px; }
+.later button { background:none; border:none; color:var(--onb-muted); font-size:12.5px; cursor:pointer; }
+.later button:hover { color:var(--onb-ink2); }
+
+/* 第 2 步:探测横幅(B 风:白底引用块变体) */
+.probe { display:flex; gap:14px; align-items:center; background:#fff;
+  border-left:3px solid var(--onb-accent); border-radius:0 10px 10px 0;
+  box-shadow:0 1px 4px rgba(17,24,39,.05); padding:18px 22px; margin:0 0 30px; }
+.probe--offline { border-left-color:#d97706; }
+.probe--no-workspace { border-left-color:#d97706; }
+.probe__icon { width:40px; height:40px; flex:none; border-radius:50%; display:flex; align-items:center;
+  justify-content:center; font-size:16px; font-weight:700;
+  background:rgba(15,98,254,.08); color:var(--onb-accent); }
+.probe--online .probe__icon { background:rgba(14,159,110,.1); color:var(--onb-ok); }
+.probe--offline .probe__icon, .probe--no-workspace .probe__icon {
+  background:rgba(217,119,6,.1); color:#b45309; }
+.probe__body { flex:1; }
+.probe__t { font-size:15px; font-weight:700; }
+.probe__d { font-size:13px; color:var(--onb-ink2); line-height:1.6; margin-top:3px; }
+.probe__badge { flex:none; font-size:11px; font-weight:700; letter-spacing:1px; padding:4px 12px;
+  border-radius:99px; background:rgba(15,98,254,.07); color:var(--onb-accent); }
+.probe--online .probe__badge { background:rgba(14,159,110,.08); color:var(--onb-ok); }
+.probe--offline .probe__badge, .probe--no-workspace .probe__badge {
+  background:rgba(217,119,6,.1); color:#b45309; }
+
+/* 三步操作:编辑风编号列表 */
+.steps3 { margin:0 0 30px; border-left:2px solid var(--onb-line); }
+.srow { display:flex; gap:14px; position:relative; padding:13px 0 13px 24px; }
+.srow::before { content:''; position:absolute; left:-7px; top:24px; width:12px; height:12px;
+  border-radius:50%; background:var(--onb-bg); border:2.5px solid var(--onb-accent);
+  transform:translateY(-50%); }
+.sn { font-size:13px; font-weight:700; color:var(--onb-accent); width:24px; padding-top:2px; }
+.st { font-size:15px; font-weight:650; margin-bottom:4px; }
+.sd { font-size:13px; color:var(--onb-ink2); line-height:1.65; margin-bottom:10px; }
+.sbtn { border-radius:8px; }
+
+/* 启动命令卡:编辑风引用块 + 等宽代码 */
+.cmdcard { background:#fff; border-left:3px solid var(--onb-accent); border-radius:0 10px 10px 0;
+  box-shadow:0 1px 4px rgba(17,24,39,.05); padding:18px 22px; margin:0 0 10px; }
+.cmdcard__tag { font-size:11px; font-weight:700; letter-spacing:2px; color:var(--onb-accent); margin-bottom:10px; }
+.cmdcard__pre { font-family:'SF Mono',Menlo,Consolas,monospace; font-size:12px; line-height:1.7;
+  color:var(--onb-ink); background:var(--onb-bg); border:1px solid var(--onb-line);
+  border-radius:8px; padding:12px 14px; white-space:pre-wrap; word-break:break-all; margin:0 0 12px; }
+.cmdcard__copy { background:var(--onb-accent); color:#fff; border:none; border-radius:8px;
+  padding:9px 20px; font-size:13.5px; font-weight:700; cursor:pointer; }
+.cmdcard__copy:hover { filter:brightness(1.1); }
+.cmdcard--err { background:#fffbeb; border-left-color:#d97706; color:#92400e;
+  font-size:13.5px; padding:14px 20px; border-radius:0 10px 10px 0; }
+
+/* 快捷链接 */
+.quicklinks { display:flex; gap:10px; flex-wrap:wrap; margin-top:20px; }
+.ql { padding:9px 18px; border-radius:8px; border:1px solid var(--onb-line); background:#fff;
+  font-size:13px; font-weight:600; cursor:pointer; color:var(--onb-ink); }
+.ql:hover { border-color:var(--onb-accent); color:var(--onb-accent); }
+.ql--primary { background:var(--onb-accent); color:#fff; border-color:var(--onb-accent); }
+.ql--primary:hover { color:#fff; filter:brightness(1.08); }
+
+@media (max-width:760px) {
+  .wrap { padding:0 20px 50px; }
+  .bignum { font-size:90px; }
+  .frow { flex-wrap:wrap; }
+  .frow .t { width:auto; }
+}
+
+.skip-top { margin-left:auto; background:none; border:none; color:var(--onb-muted); font-size:13px; cursor:pointer; padding:6px 10px; border-radius:6px; }
+.skip-top:hover { color:var(--onb-ink); background:var(--onb-bg); }

@@ -1,0 +1,151 @@
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  mvc:
+    async:
+      request-timeout: 180000
+
+mybatis:
+  mapper-locations: classpath:mapping/*Dao.xml
+  type-aliases-package: com.ainative.dao
+  configuration:
+    map-underscore-to-camel-case: true
+
+logging:
+  config: classpath:log4j2.xml
+
+server:
+  tomcat:
+    threads:
+      min-spare: 150
+      max: 2000
+      stuck-detected:
+        threshold: 100
+        interruptThreadThreshold: 110
+    accept-count: 200
+    max-connections: 1000
+
+oss:
+  endpoint: ${OSS_ENDPOINT:}
+  public-endpoint: ${OSS_PUBLIC_ENDPOINT:}
+  bucket: ${OSS_BUCKET:}
+  access-key-id: ${OSS_ACCESS_KEY_ID:}
+  access-key-secret: ${OSS_ACCESS_KEY_SECRET:}
+  task-pkg-bucket: ${OSS_TASK_PKG_BUCKET:${OSS_BUCKET:}}
+  artifact-bucket: ${OSS_ARTIFACT_BUCKET:${OSS_BUCKET:}}
+  skill-bucket: ${OSS_SKILL_BUCKET:${OSS_BUCKET:}}
+  backup-bucket: ${OSS_BACKUP_BUCKET:}
+
+# S3-compatible object storage (AWS S3, MinIO, etc.). Mutually exclusive with oss.enabled.
+# endpoint is used server-side; public-endpoint signs download URLs handed to clients.
+s3:
+  enabled: ${S3_ENABLED:false}
+  endpoint: ${S3_ENDPOINT:}
+  public-endpoint: ${S3_PUBLIC_ENDPOINT:}
+  region: ${S3_REGION:us-east-1}
+  access-key-id: ${S3_ACCESS_KEY_ID:}
+  access-key-secret: ${S3_ACCESS_KEY_SECRET:}
+  force-path-style: true
+  # Bucket names are configured under oss.* (shared across backends), not here.
+
+ainative:
+  version: ${AINATIVE_VERSION:x.x.x}
+  public-base-url: ${AINATIVE_PUBLIC_BASE_URL:http://localhost:7001}
+  # 社区版本：为 true 时前端隐藏新建 MCP 令牌入口中的「更多客户端接入」。
+  # 支持环境变量 AINATIVE_COMMUNITY_EDITION 覆盖。
+  community-edition: ${AINATIVE_COMMUNITY_EDITION:true}
+  conversation:
+    queue-recovery:
+      fixed-delay-ms: ${AINATIVE_CONVERSATION_QUEUE_RECOVERY_FIXED_DELAY_MS:10000}
+    im-delivery:
+      fixed-delay-ms: ${AINATIVE_CONVERSATION_IM_DELIVERY_FIXED_DELAY_MS:5000}
+    elicitation:
+      timeout-minutes: ${AINATIVE_CONVERSATION_ELICITATION_TIMEOUT_MINUTES:30}
+      delivery-timeout-seconds: ${AINATIVE_CONVERSATION_ELICITATION_DELIVERY_TIMEOUT_SECONDS:300}
+      delivery-sweep-ms: ${AINATIVE_CONVERSATION_ELICITATION_DELIVERY_SWEEP_MS:1000}
+  squad:
+    workflow:
+      cancel-interval-ms: ${AINATIVE_SQUAD_WORKFLOW_CANCEL_INTERVAL_MS:30000}
+      recovery-interval-ms: ${AINATIVE_SQUAD_WORKFLOW_RECOVERY_INTERVAL_MS:30000}
+      cleanup-interval-ms: ${AINATIVE_SQUAD_WORKFLOW_CLEANUP_INTERVAL_MS:3600000}
+      max-active-generations: ${AINATIVE_SQUAD_WORKFLOW_MAX_ACTIVE_GENERATIONS:2}
+      deadline-seconds: ${AINATIVE_SQUAD_WORKFLOW_DEADLINE_SECONDS:1200}
+      retention-failed-days: ${AINATIVE_SQUAD_WORKFLOW_RETENTION_FAILED_DAYS:7}
+      retention-success-days: ${AINATIVE_SQUAD_WORKFLOW_RETENTION_SUCCESS_DAYS:30}
+      max-input-bytes: ${AINATIVE_SQUAD_WORKFLOW_MAX_INPUT_BYTES:2097152}
+  runtime:
+    recommended-version: ${AINATIVE_RUNTIME_RECOMMENDED_VERSION:0.3.32}
+    # 全局自动升级开关：开启后服务端发现执行器版本落后就自动下发升级指令。默认开启；
+    # 关闭请改这里（或设同名环境变量）后重启服务端，手动与批量升级不受它影响。
+    executor-auto-update-enabled: ${AINATIVE_RUNTIME_EXECUTOR_AUTO_UPDATE_ENABLED:true}
+  # Public OIDC/SAML federation. Connections remain disabled until an administrator configures them.
+  federation:
+    sp-entity-id: ${AINATIVE_FEDERATION_SP_ENTITY_ID:ainative}
+    login-state-ttl-seconds: ${AINATIVE_FEDERATION_LOGIN_STATE_TTL_SECONDS:600}
+    ticket-ttl-seconds: ${AINATIVE_FEDERATION_TICKET_TTL_SECONDS:300}
+    clock-skew-seconds: ${AINATIVE_FEDERATION_CLOCK_SKEW_SECONDS:120}
+    jwks-cache-ttl-seconds: ${AINATIVE_FEDERATION_JWKS_CACHE_TTL_SECONDS:3600}
+    http-timeout-seconds: ${AINATIVE_FEDERATION_HTTP_TIMEOUT_SECONDS:15}
+  provider-model-catalog:
+    refresh-fixed-delay-ms: 86400000
+    refresh-lock-ttl-ms: 120000
+    request-timeout-seconds: 20
+    ticket-ttl-seconds: 30
+    max-candidates: 3
+    failure-cooldown-seconds: 300
+    worker-queue-capacity: 8
+  executor-update:
+    scan-fixed-delay-ms: ${AINATIVE_EXECUTOR_UPDATE_SCAN_FIXED_DELAY_MS:60000}
+  debug-log:
+    reconciliation:
+      fixed-delay-ms: ${AINATIVE_DEBUG_LOG_RECONCILIATION_FIXED_DELAY_MS:3600000}
+  dispatch:
+    recovery:
+      package-retries: ${AINATIVE_DISPATCH_RECOVERY_PACKAGE_RETRIES:3}
+      retry-delay-ms: ${AINATIVE_DISPATCH_RECOVERY_RETRY_DELAY_MS:30000}
+  im:
+    notification:
+      dlq-stream-key: ${AINATIVE_IM_NOTIFICATION_DLQ_STREAM_KEY:ainative:im-notification:dlq}
+      dlq-max-length: ${AINATIVE_IM_NOTIFICATION_DLQ_MAX_LENGTH:10000}
+      max-backoff-ms: ${AINATIVE_IM_NOTIFICATION_MAX_BACKOFF_MS:30000}
+  scheduled-task:
+    # Enabled by default: a fresh community install imports the complete
+    # docs/ainative-schema.sql, so the module is ready immediately. When
+    # upgrading an existing multi-node deployment, set all three to false until
+    # every node runs the new schema — see docs/scheduled-task-operations.md.
+    enabled: ${AINATIVE_SCHEDULED_TASK_ENABLED:true}
+    scanner-enabled: ${AINATIVE_SCHEDULED_TASK_SCANNER_ENABLED:true}
+    cluster-ready-attestation: ${AINATIVE_SCHEDULED_TASK_CLUSTER_READY:true}
+    scan-fixed-delay-ms: ${AINATIVE_SCHEDULED_TASK_SCAN_FIXED_DELAY_MS:10000}
+    scan-batch-size: ${AINATIVE_SCHEDULED_TASK_SCAN_BATCH_SIZE:100}
+    lock-ttl-seconds: ${AINATIVE_SCHEDULED_TASK_LOCK_TTL_SECONDS:30}
+  security:
+    secret-crypto:
+      master-key: ${AINATIVE_SECRET_MASTER_KEY:}
+  jwt:
+    secret: ${AINATIVE_JWT_SECRET:}
+    access-ttl-seconds: 7200
+    refresh-ttl-seconds: 604800
+  insights:
+    human-agent:
+      timezone: Asia/Shanghai
+      cron: "0 0 3 * * *"
+      cache-ttl-seconds: 97200
+      lock-ttl-millis: 3600000
+      refresh-core-pool-size: 1
+      refresh-max-pool-size: 2
+      refresh-queue-capacity: 20
+      tail-cache-ttl-seconds: ${AINATIVE_INSIGHTS_HUMAN_AGENT_TAIL_CACHE_TTL_SECONDS:60}
+
+feishu:
+  inbox:
+    poll-ms: ${FEISHU_INBOX_POLL_MS:3000}
+    initial-delay-ms: ${FEISHU_INBOX_INITIAL_DELAY_MS:15000}
+
+memory:
+  document-store:
+    enabled: ${AINATIVE_MEMORY_DOCUMENT_STORE_ENABLED:true}
+
+dashboard:
+  pipeline-health:
+    avg-source: ${DASHBOARD_PIPELINE_HEALTH_AVG_SOURCE:FACT}

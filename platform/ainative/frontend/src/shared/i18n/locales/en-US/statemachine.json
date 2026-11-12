@@ -1,0 +1,93 @@
+{
+  "page": {
+    "title": "Status templates",
+    "create": "New template",
+    "empty": "No templates"
+  },
+  "workTypes": {
+    "REQ": "Requirement (REQ)",
+    "TASK": "Task (TASK)",
+    "BUG": "Bug (BUG)"
+  },
+  "actions": {
+    "createTemplate": "New status template",
+    "defaultTemplate": "Set default status template",
+    "deleteTemplate": "Delete status template",
+    "createNode": "Add status node",
+    "editNode": "Edit status node",
+    "deleteNode": "Delete status node",
+    "createTransition": "Add transition",
+    "editTransition": "Edit transition",
+    "deleteTransition": "Delete transition"
+  },
+  "common": {
+    "edit": "Edit",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "close": "Close"
+  },
+  "templates": {
+    "current": "Current template:",
+    "default": "Default",
+    "setDefault": "Make default template",
+    "confirmDelete": "Delete this template?",
+    "name": "Template name",
+    "nameRequired": "Enter a template name",
+    "namePlaceholder": "e.g. Custom requirement flow"
+  },
+  "categories": {
+    "INIT": "Start",
+    "IN_PROGRESS": "In progress",
+    "DONE": "Done",
+    "CANCELED": "Canceled"
+  },
+  "nodes": {
+    "title": "Status nodes",
+    "help": "Define all possible work item statuses",
+    "add": "Add node",
+    "confirmDelete": "Delete this status node?",
+    "editLabel": "Edit status node {{code}}",
+    "deleteLabel": "Delete status node {{code}}",
+    "code": "Code",
+    "codeRequired": "Enter the status code",
+    "codeHelp": "Identifier, e.g. developing, verifying",
+    "codePlaceholder": "e.g. developing",
+    "name": "Display name",
+    "nameRequired": "Enter a display name",
+    "namePlaceholder": "e.g. Developing",
+    "category": "Category",
+    "categoryRequired": "Pick a category",
+    "sort": "Sort order",
+    "sortHelp": "Lower numbers come first"
+  },
+  "transitions": {
+    "title": "Quick transitions",
+    "help": "Define quick status change buttons on the work item page",
+    "add": "Add quick transition",
+    "editTitle": "Edit quick transition",
+    "fromColumn": "From status",
+    "toColumn": "To status",
+    "name": "Action name",
+    "actions": "Actions",
+    "confirmDelete": "Delete this transition?",
+    "warning": "Recommended transitions only define quick buttons on the work item page. Users can always manually switch a work item to any status.",
+    "from": "From",
+    "fromRequired": "Pick the source status",
+    "fromPlaceholder": "Pick source status",
+    "to": "To",
+    "toRequired": "Pick the target status",
+    "toPlaceholder": "Pick target status",
+    "nameRequired": "Enter the action name",
+    "nameHelp": "Shown as the quick action button text on the work item page",
+    "namePlaceholder": "e.g. Start work"
+  },
+  "messages": {
+    "templateCreated": "Template created",
+    "saved": "Saved",
+    "deleted": "Deleted",
+    "nodeAdded": "Node added",
+    "nodeDeleted": "Node deleted",
+    "transitionAdded": "Transition added",
+    "transitionDeleted": "Transition deleted"
+  }
+}

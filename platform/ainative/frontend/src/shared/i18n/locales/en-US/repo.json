@@ -1,0 +1,143 @@
+{
+  "fields": {
+    "id": "ID",
+    "name": "Name",
+    "url": "URL",
+    "description": "Description",
+    "created": "Created",
+    "actions": "Actions",
+    "repoName": "Repository slug",
+    "repoUrl": "Clone URL",
+    "branch": "Default branch",
+    "peer": "Peer repo",
+    "relationType": "Edge type",
+    "source": "From repo",
+    "target": "To repo"
+  },
+  "actions": {
+    "addRepo": "Add repo",
+    "deleteRepo": "Remove repo",
+    "map": "Dependency graph",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "back": "Back",
+    "edit": "Edit",
+    "backList": "Back to list",
+    "addRelation": "Add edge",
+    "deleteRelation": "Drop edge",
+    "close": "Close",
+    "addRepoRelation": "New repo edge",
+    "deleteRepoRelation": "Delete repo edge",
+    "editRepo": "Edit repo profile",
+    "saveRepo": "Save profile",
+    "saveConclusion": "Save scan notes",
+    "editConclusion": "Edit scan notes",
+    "startScan": "Run AI scan",
+    "scan": "Run scan",
+    "editConclusionButton": "Edit notes",
+    "deleteRepoLabel": "Remove repo {{name}}",
+    "clearBranch": "Clear default branch",
+    "clearDescription": "Clear description"
+  },
+  "feedback": {
+    "added": "Repo connected",
+    "deleted": "Repo removed",
+    "repoSaved": "Profile saved",
+    "conclusionSaved": "Notes saved",
+    "relationCreated": "Edge created",
+    "relationDeleted": "Edge dropped",
+    "scanConfirmed": "Scan notes finalized"
+  },
+  "errors": {
+    "addRepo": "Could not add the repo",
+    "deleteRepo": "Could not remove the repo",
+    "save": "Save failed",
+    "create": "Create failed",
+    "invalidId": "Invalid ID",
+    "load": "Load failed",
+    "retry": "Try again later",
+    "graphRender": "The graph cannot render right now — refresh and retry.",
+    "graphResize": "Canvas resize failed — retry."
+  },
+  "validation": {
+    "nameRequired": "Name the repo",
+    "urlRequired": "Enter the clone URL",
+    "urlInvalid": "Not a valid URL",
+    "sourceRequired": "Pick the source repo",
+    "targetRequired": "Pick the target repo",
+    "typeRequired": "Pick an edge type",
+    "nameInvalid": "The slug must be a single path segment: no / or \\, not \".\" or \"..\", not absolute. Put namespace/repo-name identifiers in the clone URL instead."
+  },
+  "placeholders": {
+    "urlExample": "https://github.com/example/repo or git@example.com:workspace/repo.git",
+    "repoUrl": "git@host:group/repo.git or https://…",
+    "clearBranch": "Leave empty to clear the default branch",
+    "clearDescription": "Repo background; leave empty to clear",
+    "source": "Pick source repo",
+    "target": "Pick target repo",
+    "type": "Pick edge type",
+    "description": "Optional"
+  },
+  "confirm": {
+    "deleteHint": "Removing the repo drops all of its edges. This cannot be undone.",
+    "deleteRelation": "Drop this edge?",
+    "deleteRepo": "Remove repo \"{{name}}\"?"
+  },
+  "tabs": {
+    "info": "Profile",
+    "relations": "Edges",
+    "conclusion": "Scan notes"
+  },
+  "scan": {
+    "status": "Scan progress",
+    "complete": "Scanned",
+    "notScanned": "Not scanned",
+    "lastTime": "Last scan",
+    "purpose": "Purpose",
+    "business": "Core domain",
+    "upstreams": "Upstream",
+    "downstreams": "Downstream",
+    "purposePlaceholder": "What is this repo for",
+    "businessPlaceholder": "Core business domain",
+    "upstreamsPlaceholder": "Upstream repos/services, comma separated",
+    "downstreamsPlaceholder": "Downstream repos/services, comma separated",
+    "markdown": "Notes (Markdown)",
+    "summaryPlaceholder": "Detailed repo notes…",
+    "summary": "Summary",
+    "empty": "No scan notes yet",
+    "emptyHint": "Run a scan or write notes by hand",
+    "drawer": "AI scan"
+  },
+  "map": {
+    "help": "Scroll to zoom · drag the canvas · click a node for details",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
+    "exitFullscreen": "Exit fullscreen",
+    "fullscreen": "Fullscreen",
+    "fit": "Fit canvas",
+    "empty": "The canvas is empty",
+    "emptyHint": "Add repositories and relations first; the graph will grow here.",
+    "details": "Edge details",
+    "source": "From:",
+    "target": "To:",
+    "type": "Type:",
+    "description": "Note:"
+  },
+  "hub": {
+    "title": "Code repositories",
+    "listHint": "Connect remote repositories; manage credentials, branch policies and access",
+    "mapHint": "Map cross-repo calls and dependencies on canvas; click a node to drill in"
+  },
+  "relation": {
+    "frontend": "Frontend",
+    "backend": "Backend",
+    "clientServer": "Client calls server",
+    "serverClient": "Server pushes client",
+    "gateway": "Gateway",
+    "dependency": "Dependency",
+    "service": "Service-to-service",
+    "other": "Other"
+  }
+}

@@ -1,0 +1,104 @@
+package com.ainative.memory.store;
+
+import com.ainative.access.RequireWorkspaceAccess;
+import com.ainative.access.WorkspaceAccessLevel;
+import com.ainative.common.error.BizException;
+import com.ainative.common.error.ErrorCode;
+import com.ainative.common.result.Result;
+import com.ainative.context.RequestContext;
+import com.ainative.memory.store.dto.MemoryMutationRequest;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/memory-stores")
+@RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_ONLY, action = "查看记忆文档", actionKey = "access.action.view_memory_documents")
+public class MemoryStoreController {
+    private final MemoryStoreApplicationService memories;
+
+    public MemoryStoreController(MemoryStoreApplicationService memories) {
+        this.memories = memories;
+    }
+
+    @ExceptionHandler(MemoryStoreApplicationService.MemoryAccessDeniedException.class)
+    public ResponseEntity<Result<Void>> accessDenied() {
+        return ResponseEntity.status(403).body(Result.fail(ErrorCode.NO_PERMISSION));
+    }
+
+    @GetMapping
+    public Result<List<MemoryStoreDO>> list() {
+        return Result.ok(memories.listForUser(tenantId(), userId(), administrator()));
+    }
+
+    @PostMapping
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.ADMIN, action = "创建记忆存储", actionKey = "access.action.create_a_memory_store")
+    public Result<MemoryStoreDO> create(@RequestBody MemoryStoreDO store) {
+        return Result.ok(memories.createStore(tenantId(), userId(), administrator(), store));
+    }
+
+    @DeleteMapping("/{storeId}")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.ADMIN, action = "归档记忆存储", actionKey = "access.action.archive_a_memory_store")
+    public Result<Void> archive(@PathVariable long storeId, @RequestParam int version) {
+        memories.archiveStore(tenantId(), userId(), administrator(), storeId, version);
+        return Result.ok(null);
+    }
+
+    @GetMapping("/{storeId}/documents")
+    public Result<List<MemoryDocumentDO>> documents(@PathVariable long storeId) {
+        var documents = memories.documentsForUser(tenantId(), userId(), administrator(), storeId);
+        documents.forEach(MemoryDirectoryService::describe);
+        return Result.ok(documents);
+    }
+
+    @PostMapping("/{storeId}/mutations")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "维护记忆文档", actionKey = "access.action.maintain_memory_documents")
+    public Result<MemoryDocumentDO> mutate(@PathVariable long storeId, @RequestBody MemoryMutationRequest request) {
+        return Result.ok(memories.mutateForUser(tenantId(), userId(), administrator(), storeId, request));
+    }
+
+    @GetMapping("/{storeId}/history")
+    public Result<List<MemoryChangeDO>> history(@PathVariable long storeId,
+                                               @RequestParam(defaultValue = "0") long afterRevision,
+                                               @RequestParam(defaultValue = "100") int limit) {
+        return Result.ok(memories.historyForUser(tenantId(), userId(), administrator(), storeId,
+                afterRevision, limit));
+    }
+
+    @PutMapping("/{storeId}/acls")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.ADMIN, action = "管理记忆权限", actionKey = "access.action.manage_memory_access")
+    public Result<Void> putAcl(@PathVariable long storeId, @RequestBody MemoryStoreAclDO acl) {
+        memories.putAcl(tenantId(), userId(), administrator(), storeId, acl);
+        return Result.ok(null);
+    }
+
+    @GetMapping("/{storeId}/acls")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.ADMIN, action = "查看记忆权限", actionKey = "access.action.view_memory_access")
+    public Result<List<MemoryStoreAclDO>> acls(@PathVariable long storeId) {
+        return Result.ok(memories.aclsForUser(tenantId(), userId(), administrator(), storeId));
+    }
+
+    @DeleteMapping("/{storeId}/acls/{aclId}")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.ADMIN, action = "管理记忆权限", actionKey = "access.action.manage_memory_access")
+    public Result<Void> deleteAcl(@PathVariable long storeId, @PathVariable long aclId) {
+        memories.deleteAcl(tenantId(), userId(), administrator(), storeId, aclId);
+        return Result.ok(null);
+    }
+
+    private long tenantId() {
+        Long value = RequestContext.get().getCurrentWorkspaceId();
+        if (value == null) throw new BizException(ErrorCode.WORKSPACE_NOT_MEMBER);
+        return value;
+    }
+
+    private long userId() {
+        Long value = RequestContext.get().getUserId();
+        if (value == null) throw new BizException(ErrorCode.UNAUTHORIZED);
+        return value;
+    }
+
+    private boolean administrator() {
+        return RequestContext.get().getWorkspaceAccessLevel() == WorkspaceAccessLevel.ADMIN;
+    }
+}

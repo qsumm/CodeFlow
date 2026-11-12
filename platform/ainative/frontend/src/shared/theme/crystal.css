@@ -1,0 +1,75 @@
+/* CodeFlow 工作台皮肤基础层(设计契约 v5)
+ * 颜色体系沿用既有令牌;规则变化:控件 8px 圆角、面板 10px、弹窗 12px、徽标 6px;
+ * 表头一律左对齐;去按钮高光渐变、去斑马纹、去圆形胶囊徽章。
+ * 页面代码只使用令牌,不直接写主题色。 */
+:root{--cf-bg:#0e0f11;--cf-panel:#1b1d20;--cf-sidebar:#141619;--cf-raised:#1e1f23;--cf-field:#16171a;--cf-border:rgba(255,255,255,.08);--cf-text:#f5f5f7;--cf-muted:#9a9aa2;--cf-accent:#2383e2;--cf-accent-rgb:35,131,226;--cf-accent-text:#2383e2;--cf-primary:#2383e2;--cf-primary-ink:#0e0f11;--cf-glass:rgba(20,22,26,.95);color-scheme:dark}
+:root[data-appearance=light]{color-scheme:light}
+body{margin:0;background:var(--cf-bg);color:var(--cf-text)}
+*{box-sizing:border-box}
+.appearance-option{display:flex;align-items:center;justify-content:space-between;gap:22px;min-width:82px}
+.appearance-option .anticon{color:var(--cf-accent-text)}
+html .appearance-switch{width:36px;padding:0;flex-shrink:0}
+html .ant-btn{font-weight:500;transition:background-color .16s ease,border-color .16s ease,color .16s ease;box-shadow:none;background-image:none}
+html[data-appearance=dark] .ant-btn:not(.ant-btn-text):not(.ant-btn-link){background-image:none;box-shadow:none}
+html[data-appearance=light] .ant-btn{background-image:none;box-shadow:none}
+html .ant-btn-default:not(:disabled):not(.ant-btn-dangerous):hover{background-color:var(--cf-button-hover);color:var(--cf-text);border-color:var(--cf-muted)}
+html .ant-btn-default:not(:disabled):not(.ant-btn-dangerous):active{background:var(--cf-button-active)}
+html .ant-btn-primary:not(.ant-btn-dangerous){background-color:var(--cf-primary);color:var(--cf-primary-ink);border-color:var(--cf-primary)}
+html .ant-btn-primary:not(:disabled):not(.ant-btn-dangerous):hover{background-color:var(--cf-primary-hover);color:var(--cf-primary-ink);border-color:var(--cf-primary-hover)}
+html .ant-btn-primary:not(:disabled):not(.ant-btn-dangerous):active{background:var(--cf-primary-active)}
+html .ant-btn:disabled,html .ant-btn.ant-btn-loading{box-shadow:none;background-image:none}
+html .ant-btn-primary:disabled{background:var(--cf-raised);border-color:var(--cf-border);color:var(--cf-muted);opacity:.6}
+html :is(button,a,input:not(.ant-input),textarea:not(.ant-input),[role=combobox]):focus-visible{outline:2px solid var(--cf-accent-text);outline-offset:2px}
+html :is(.ant-select-dropdown,.ant-dropdown-menu,.ant-picker-dropdown .ant-picker-panel-container){background:var(--cf-glass);backdrop-filter:blur(20px) saturate(1.2);-webkit-backdrop-filter:blur(20px) saturate(1.2);border:1px solid color-mix(in srgb,var(--cf-border) 65%,var(--cf-text));border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.35)}
+html .ant-dropdown-menu-item,html .ant-select-item{border-radius:6px}
+html .ant-dropdown-menu-item-selected,html .ant-select-item-option-selected:not(.ant-select-item-option-disabled){background:rgba(var(--cf-accent-rgb),.14);color:var(--cf-text)}
+html .ant-select-selector{background:var(--cf-field)}
+html .ant-segmented{border:1px solid var(--cf-border);background:var(--cf-field);padding:3px;border-radius:8px}
+html .ant-segmented :is(.ant-segmented-item-selected,.ant-segmented-thumb){box-shadow:none}
+html .ant-tag{border-radius:6px;line-height:22px;margin-inline-end:0;padding-inline:8px}
+/* 表头对齐跟随 ThemedTable 列声明(默认居中),不再强制左对齐(2026-11-10 头尾一致性修复) */
+html .ant-table-tbody>tr>td{vertical-align:middle}
+html .ant-pagination .ant-pagination-item-active{background:rgba(var(--cf-accent-rgb),.13);border-color:var(--cf-accent-text);border-radius:6px}
+.cf-offset-pagination{display:flex;justify-content:flex-end;flex-wrap:wrap;row-gap:8px;margin-top:16px}
+html .ant-table-content{scrollbar-width:thin;scrollbar-color:var(--cf-border) transparent}
+.cf-shell{background:var(--cf-bg)}
+.cf-shell .ant-layout-sider{background:var(--cf-sidebar)}
+.cf-brand{color:var(--cf-text)}
+/* 工作项表格:数字列等宽字体;无斑马纹,悬浮行以 accent 左缘标记(console.css) */
+.cf-workitems .ant-table-tbody .cf-column-numeric{font-family:"SFMono-Regular",Consolas,monospace;font-size:12px;font-variant-numeric:tabular-nums}
+.cf-workitems .ant-table-tbody .cf-column-title a{color:var(--cf-text)}
+.cf-workitems .ant-table-tbody .cf-column-title a:hover{color:var(--cf-accent-text)}
+.cf-workitems .ant-card-extra>.ant-space{gap:16px!important}
+.cf-branding{min-width:920px;color:var(--cf-text)}
+.cf-branding .ant-card{background:var(--cf-panel);border-color:var(--cf-border);border-radius:10px}
+.cf-branding .ant-card-head-title{font-size:16px}
+.cf-branding .ant-radio-button-wrapper{background:var(--cf-field);padding-inline:12px}
+.cf-branding .ant-radio-button-wrapper:before{display:none}
+.cf-robot-head{display:inline-flex;width:1em;height:1em;align-items:center;justify-content:center}
+.cf-robot-head svg{width:100%;height:100%;stroke-width:1.75;fill:none;stroke:currentColor}
+/* 弹窗与浮层圆角体系(12/10)在 console.css 落到具体组件 */
+.cf-initial-mark{background:var(--cf-primary);color:var(--cf-primary-ink)}
+.cf-watch-active{color:var(--cf-accent-text)}
+
+/* Status colors stay independent of the customer accent. */
+html .ant-tag:is(.ant-tag-blue,.ant-tag-processing){--cf-tag-ink:var(--cf-info)}
+html .ant-tag:is(.ant-tag-green,.ant-tag-success){--cf-tag-ink:var(--cf-success)}
+
+/* ── 工单详情操作栏(2026-11-11):两个类此前无任何样式定义,按钮零间距叠压 ── */
+.cf-workitem-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+}
+.cf-workitem-actions .ant-btn { flex: none; }
+/* 交付开关:与动作按钮组之间留出分组间隔,红/灰按钮不再贴压 */
+.cf-delivery-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+  padding-left: 12px;
+  border-left: 1px solid var(--cf-border);
+}

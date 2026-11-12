@@ -1,0 +1,429 @@
+import { i18n } from '@/shared/i18n';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { message } from 'antd';
+import { createMemoryRouter, RouterProvider, MemoryRouter, Route, Routes } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { http, HttpResponse } from 'msw';
+import { server } from '@/test/mocks/server';
+import { useAuthStore } from '@/shared/auth/store';
+import { AgentListPage } from './AgentListPage';
+
+function renderPage() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/agents']}>
+        <Routes>
+          <Route path="/agents" element={<AgentListPage />} />
+          <Route path="/agents/:id" element={<div>AI 成员详情路由</div>} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+describe('AgentListPage', () => {
+  beforeEach(() => {
+    useAuthStore.getState().clear();
+    useAuthStore.getState().setCurrentWorkspace({ id: 1, name: 'O', description: '' }, 'READ_WRITE');
+    window.localStorage.removeItem('ainative.agents.view');
+    vi.restoreAllMocks();
+  });
+
+  it('renders compact agent cards with usage and executor status', async () => {
+    server.use(
+      http.get('/api/agents', () => {
+        return HttpResponse.json({
+          success: true, code: '0', message: '', traceId: null,
+          data: [{
+            id: 1,
+            name: 'Alpha',
+            avatarUrl: null,
+            status: 'ONLINE',
+            onlineVersionId: null,
+            editingVersionId: null,
+            latestVersionNo: 2,
+            version: 1,
+            gmtCreate: '2026-07-01',
+            roleName: '前端开发工程师',
+            roleCode: 'FRONTEND_DEV',
+            executorOnlineCount: 1,
+            executorTotalCount: 2,
+            skillCount: 3,
+            memoryCount: 4,
+            repoPermCount: 5,
+          }],
+        });
+      }),
+    );
+    renderPage();
+    expect(await screen.findByText('Alpha')).toBeInTheDocument();
+    expect(screen.getAllByText('使用中').length).toBeGreaterThan(0);
+    expect(screen.getByText('前端开发工程师')).toBeInTheDocument();
+    expect(screen.getByText('1/2 在线')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('技能')).toBeInTheDocument();
+    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getByText('记忆')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
+    expect(screen.getByText('仓库')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('keeps create visible but does not navigate for a read-only member', async () => {
+    const error = vi.spyOn(message, 'error').mockImplementation(
+      () => undefined as unknown as ReturnType<typeof message.error>,
+    );
+    useAuthStore.getState().setCurrentWorkspace({ id: 1, name: 'O', description: '' }, 'READ_ONLY');
+    server.use(
+      http.get('/api/agents', () => HttpResponse.json({
+        success: true, code: '0', message: '', traceId: null, data: [],
+      })),
+    );
+    renderPage();
+
+    await screen.findByText('暂无AI 成员');
+    expect(screen.getAllByRole('button', { name: /新建/ })).toHaveLength(1);
+    await userEvent.click(screen.getByRole('button', { name: /新建$/ }));
+
+    expect(error).toHaveBeenCalledWith('当前为只读权限，新建AI 成员需要读写权限');
+    await userEvent.hover(screen.getByRole('button', { name: '配置说明' }));
+    expect(await screen.findByText('点击任一AI 成员卡片进入详情与配置。')).toBeInTheDocument();
+  });
+
+  it('shows configuration guidance and one accessible detail link per card', async () => {
+    server.use(
+      http.get('/api/agents', () => {
+        return HttpResponse.json({
+          success: true, code: '0', message: '', traceId: null,
+          data: [{
+            id: 1,
+            name: 'Alpha',
+            avatarUrl: null,
+            status: 'ONLINE',
+            onlineVersionId: null,
+            editingVersionId: null,
+            latestVersionNo: 2,
+            version: 1,
+            gmtCreate: '2026-07-01',
+            roleName: '前端开发工程师',
+            roleCode: 'FRONTEND_DEV',
+            executorOnlineCount: 1,
+            executorTotalCount: 2,
+            skillCount: 3,
+            memoryCount: 4,
+            repoPermCount: 5,
+          }],
+        });
+      }),
+    );
+    renderPage();
+    await screen.findByText('Alpha');
+
+    await userEvent.hover(screen.getByRole('button', { name: '配置说明' }));
+    expect(await screen.findByText('点击任一AI 成员卡片进入详情与配置。')).toBeInTheDocument();
+    expect(screen.getByText('可维护 SOUL.md、AGENT.md、记忆、仓库权限、流水线 模板及技能/能力配置。')).toBeInTheDocument();
+
+    const detailLink = screen.getByRole('link', { name: '看 Alpha 详情' });
+    expect(detailLink).toHaveAttribute('href', '/agents/1');
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+  });
+
+  it('navigates to agent detail page when clicking the card', async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get('/api/agents', () => {
+        return HttpResponse.json({
+          success: true, code: '0', message: '', traceId: null,
+          data: [{
+            id: 1,
+            name: 'Alpha',
+            avatarUrl: null,
+            status: 'ONLINE',
+            onlineVersionId: null,
+            editingVersionId: null,
+            latestVersionNo: 2,
+            version: 1,
+            gmtCreate: '2026-07-01',
+            roleName: '前端开发工程师',
+            roleCode: 'FRONTEND_DEV',
+            executorOnlineCount: 1,
+            executorTotalCount: 2,
+            skillCount: 3,
+            memoryCount: 4,
+            repoPermCount: 5,
+          }],
+        });
+      }),
+    );
+    renderPage();
+
+    await user.click(await screen.findByRole('link', { name: '看 Alpha 详情' }));
+
+    expect(await screen.findByText('AI 成员详情路由')).toBeInTheDocument();
+  });
+
+  it('defaults to the standard tab and requests kind=STANDARD', async () => {
+    const kinds: (string | null)[] = [];
+    server.use(
+      http.get('/api/squads', () => HttpResponse.json({
+        success: true, code: '0', message: '', traceId: null,
+        data: { list: [], total: 0, pageNum: 1, pageSize: 100 },
+      })),
+      http.get('/api/agents', ({ request }) => {
+        kinds.push(new URL(request.url).searchParams.get('kind'));
+        return HttpResponse.json({ success: true, code: '0', message: '', traceId: null, data: [] });
+      }),
+    );
+    renderPage();
+    expect(await screen.findByRole('radio', { name: '标准AI 成员' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: '系统平台智能体' })).toBeInTheDocument();
+    await screen.findByText('暂无AI 成员');
+    expect(kinds).toContain('STANDARD');
+  });
+
+  it('switches to the platform tab, requests kind=PLATFORM and shows the platform badge', async () => {
+    const user = userEvent.setup();
+    const kinds: (string | null)[] = [];
+    server.use(
+      http.get('/api/squads', () => HttpResponse.json({
+        success: true, code: '0', message: '', traceId: null,
+        data: { list: [], total: 0, pageNum: 1, pageSize: 100 },
+      })),
+      http.get('/api/agents', ({ request }) => {
+        const kind = new URL(request.url).searchParams.get('kind');
+        kinds.push(kind);
+        const data = kind === 'PLATFORM'
+          ? [{
+              id: 9,
+              name: 'AI 管家',
+              avatarUrl: null,
+              status: 'ONLINE',
+              kind: 'PLATFORM',
+              onlineVersionId: 5,
+              editingVersionId: null,
+              latestVersionNo: 1,
+              version: 1,
+              gmtCreate: '2026-09-04',
+              roleName: '平台管家',
+              roleCode: 'chief_of_staff',
+              executorOnlineCount: 0,
+              executorTotalCount: 0,
+              skillCount: 0,
+              memoryCount: 0,
+              repoPermCount: 0,
+            }]
+          : [];
+        return HttpResponse.json({ success: true, code: '0', message: '', traceId: null, data });
+      }),
+    );
+    renderPage();
+    await user.click(await screen.findByText('系统平台智能体'));
+    expect(await screen.findByText('AI 管家')).toBeInTheDocument();
+    expect(screen.getByText('平台')).toBeInTheDocument();
+    expect(kinds).toContain('PLATFORM');
+    expect(screen.queryByRole('button', { name: /新 建|新建/ })).not.toBeInTheDocument();
+  });
+
+  function useSquadsAndAgents(agents: unknown[]) {
+    server.use(
+      http.get('/api/squads', () => HttpResponse.json({
+        success: true, code: '0', message: '', traceId: null,
+        data: { list: [{ id: 7, name: 'Squad A' }, { id: 8, name: 'Squad B' }], total: 2, pageNum: 1, pageSize: 100 },
+      })),
+      http.get('/api/agents', () => HttpResponse.json({
+        success: true, code: '0', message: '', traceId: null, data: agents,
+      })),
+    );
+  }
+
+  function agentRow(id: number, name: string, squadIds?: number[] | null, squadNames?: string[] | null) {
+    return {
+      id, name, status: 'ONLINE', roleName: '前端开发工程师', version: 1, latestVersionNo: 1,
+      gmtCreate: '2026-07-01', squadIds, squadNames,
+    };
+  }
+
+  it('tags each agent card with its squads and marks unaffiliated ones', async () => {
+    window.localStorage.setItem('ainative.agents.view', 'list');
+    useSquadsAndAgents([
+      agentRow(1, 'Alpha', [7, 8], ['Squad A', 'Squad B']),
+      agentRow(2, 'Beta', [], []),
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByText('Alpha')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Squad A' })).toHaveAttribute('href', '/agents?tab=squads&squadId=7');
+    expect(screen.getByRole('link', { name: 'Squad B' })).toHaveAttribute('href', '/agents?tab=squads&squadId=8');
+    expect(screen.getByText('未分组')).toBeInTheDocument();
+  });
+
+  it('re-requests the list with the selected squad ids comma joined', async () => {
+    const user = userEvent.setup();
+    const seen: string[] = [];
+    server.use(
+      http.get('/api/squads', () => HttpResponse.json({
+        success: true, code: '0', message: '', traceId: null,
+        data: { list: [{ id: 7, name: 'Squad A' }, { id: 8, name: 'Squad B' }], total: 2, pageNum: 1, pageSize: 100 },
+      })),
+      http.get('/api/agents', ({ request }) => {
+        seen.push(new URL(request.url).search);
+        return HttpResponse.json({
+          success: true, code: '0', message: '', traceId: null,
+          data: [agentRow(1, 'Alpha', [7], ['Squad A'])],
+        });
+      }),
+    );
+
+    renderPage();
+    expect(await screen.findByText('Alpha')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('combobox', { name: '按编队筛选' }));
+    await user.click(await screen.findByText('Squad A', { selector: '.ant-select-item-option-content' }));
+
+    await waitFor(() => expect(seen.some((query) => query.includes('squadIds=7'))).toBe(true));
+    // axios' default array form (`squadIds[]=7`) is not bindable by Spring's @RequestParam List<Long>.
+    expect(seen.some((query) => query.includes('squadIds%5B%5D'))).toBe(false);
+  });
+
+  it('opens grouped by default, buckets agents by squad and keeps unaffiliated ones visible', async () => {
+    useSquadsAndAgents([
+      agentRow(1, 'Alpha', [7], ['Squad A']),
+      agentRow(2, 'Beta', [8], ['Squad B']),
+      agentRow(3, 'Gamma', null, null),
+    ]);
+
+    const { container } = renderPage();
+    expect(await screen.findByText('Alpha')).toBeInTheDocument();
+
+    await waitFor(() => expect(container.querySelectorAll('.agent-squad-group-header')).toHaveLength(3));
+    const headers = [...container.querySelectorAll('.agent-squad-group-header')]
+      .map((header) => header.textContent ?? '');
+    expect(headers[0]).toContain('Squad A');
+    expect(headers[1]).toContain('Squad B');
+    expect(headers[2]).toContain('未分组');
+    expect(headers[2]).toContain('1 个');
+    // An agent in two squads shows up under both, so no group looks empty and none is dropped.
+    expect(screen.getByText('Gamma')).toBeInTheDocument();
+  });
+
+  it('restores the stored flat list view and persists every toggle', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem('ainative.agents.view', 'list');
+    useSquadsAndAgents([
+      agentRow(1, 'Alpha', [7], ['Squad A']),
+      agentRow(2, 'Beta', [8], ['Squad B']),
+      agentRow(3, 'Gamma', null, null),
+    ]);
+
+    const { container } = renderPage();
+    expect(await screen.findByText('Alpha')).toBeInTheDocument();
+    expect(container.querySelectorAll('.agent-squad-group-header')).toHaveLength(0);
+    // 列表视图现在是表格，且不再渲染分页。
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.queryByText('共 3 条')).not.toBeInTheDocument();
+
+    await user.click(screen.getByText('分组'));
+
+    await waitFor(() => expect(container.querySelectorAll('.agent-squad-group-header')).toHaveLength(3));
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('ainative.agents.view')).toBe('grouped');
+
+    await user.click(screen.getByText('列表'));
+
+    await waitFor(() => expect(container.querySelectorAll('.agent-squad-group-header')).toHaveLength(0));
+    expect(window.localStorage.getItem('ainative.agents.view')).toBe('list');
+  });
+
+  it('renders the table with ID first, short executor text and a trailing 详情 action', async () => {
+    window.localStorage.setItem('ainative.agents.view', 'list');
+    useSquadsAndAgents([agentRow(1, 'Alpha', [7], ['Squad A'])]);
+
+    renderPage();
+    expect(await screen.findByText('Alpha')).toBeInTheDocument();
+
+    const headerCells = [...screen.getAllByRole('columnheader')].map((cell) => cell.textContent ?? '');
+    expect(headerCells[0]).toBe('ID');
+    expect(headerCells).not.toContain('创建时间');
+    expect(headerCells[headerCells.length - 1]).toBe('操作');
+
+    // 表格运行器列省略「运行器」前缀；卡片视图的完整文案不受影响。
+    expect(screen.getByText('离线')).toBeInTheDocument();
+    expect(screen.queryByText('运行器离线')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '详情' })).toHaveAttribute('href', '/agents/1');
+  });
+
+  it('filters the table server-side by the selected status', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem('ainative.agents.view', 'list');
+    const seen: string[] = [];
+    server.use(
+      http.get('/api/squads', () => HttpResponse.json({
+        success: true, code: '0', message: '', traceId: null,
+        data: { list: [], total: 0, pageNum: 1, pageSize: 100 },
+      })),
+      http.get('/api/agents', ({ request }) => {
+        const params = new URL(request.url).searchParams;
+        seen.push(`status=${params.get('status')}`);
+        return HttpResponse.json({
+          success: true, code: '0', message: '', traceId: null,
+          data: [agentRow(1, 'Alpha', [7], ['Squad A'])],
+        });
+      }),
+    );
+
+    renderPage();
+    expect(await screen.findByRole('table')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('combobox', { name: '按状态筛选' }));
+    await user.click(await screen.findByText('使用中', { selector: '.ant-select-item-option-content' }));
+
+    await waitFor(() => expect(seen.some((entry) => entry === 'status=ONLINE')).toBe(true));
+    // 分组模式下没有状态筛选；切回分组不携带 status 参数。
+    await user.click(screen.getByText('分组'));
+    await waitFor(() => expect(screen.queryByRole('combobox', { name: '按状态筛选' })).not.toBeInTheDocument());
+  });
+
+  it('falls back to the grouped view when the stored view value is invalid', async () => {
+    window.localStorage.setItem('ainative.agents.view', 'bogus');
+    useSquadsAndAgents([agentRow(1, 'Alpha', [7], ['Squad A'])]);
+
+    const { container } = renderPage();
+    expect(await screen.findByText('Alpha')).toBeInTheDocument();
+
+    await waitFor(() => expect(container.querySelectorAll('.agent-squad-group-header')).toHaveLength(1));
+    expect(container.querySelector('.agent-squad-group-header')).toHaveTextContent('Squad A');
+  });
+});
+
+
+describe('routed squad grouping localization', () => {
+  it('refreshes group fallbacks and preserves authored labels without rebuilding group identity', async () => {
+    await i18n.changeLanguage('zh-CN');
+    useAuthStore.getState().setCurrentWorkspace({ id: 1, name: 'O', description: '' }, 'READ_WRITE');
+    localStorage.removeItem('ainative.agents.view');
+    server.use(
+      http.get('/api/squads', () => HttpResponse.json({ success: true, data: [{ id: 7, name: '<b>自定义编队</b>', memberAgentIds: [] }] })),
+      http.get('/api/squads/7', () => HttpResponse.json({ success: true, data: { id: 7, name: '<b>自定义编队</b>', memberAgentIds: [] } })),
+      http.get('/api/agents', () => HttpResponse.json({ success: true, data: [{ id: 1, name: '<b>自定义资源</b>', status: 'ONLINE', roleCode: 'CUSTOM', roleName: '自定义角色', squadIds: [], squadNames: [] }, { id: 2, name: 'Known', status: 'ONLINE', squadIds: [7], squadNames: ['<b>自定义编队</b>'] }, { id: 3, name: 'Missing', status: 'ONLINE', squadIds: [42] }] })),
+    );
+    const router = createMemoryRouter([{ path: '/', element: <AgentListPage /> }]);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>);
+    await screen.findByRole('combobox', { name: '按编队筛选' });
+
+    await screen.findAllByText('未分组');
+    const groupHeader = screen.getAllByText('未分组')[0];
+    await act(async () => { await i18n.changeLanguage('en-US'); });
+    await screen.findAllByText('Ungrouped');
+    expect(screen.getAllByText('Ungrouped')[0]).toBe(groupHeader);
+    expect(screen.getAllByText('Squad #42').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('<b>自定义编队</b>').length).toBeGreaterThan(0);
+    expect(screen.getByText('<b>自定义资源</b>')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Filter by squad' })).toBeInTheDocument();
+    await act(async () => { await i18n.changeLanguage('zh-CN'); });
+  });
+});

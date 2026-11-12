@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ainative.artifact.ArtifactDao">
+    <resultMap id="artifactMap" type="com.ainative.artifact.ArtifactDO">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="source_type" property="sourceType"/>
+        <result column="workitem_id" property="workitemId"/>
+        <result column="dispatch_id" property="dispatchId"/>
+        <result column="name" property="name"/>
+        <result column="type" property="type"/>
+        <result column="oss_ref" property="ossRef"/>
+        <result column="size" property="size"/>
+        <result column="meta_json" property="metaJson"/>
+        <result column="external_share_ref" property="externalShareRef"/>
+        <result column="gmt_create" property="gmtCreate"/>
+    </resultMap>
+
+    <sql id="cols" databaseId="ainative-source-aware">
+        id, tenant_id, source_type, workitem_id, dispatch_id, name, type, oss_ref, size, meta_json, gmt_create
+    </sql>
+    <sql id="cols" databaseId="ainative-legacy">
+        id, tenant_id, 'WORKITEM' AS source_type, workitem_id, dispatch_id, name, type, oss_ref, size, meta_json,
+        gmt_create
+    </sql>
+    <!-- 分享查询显式列出 external_share_ref：新列不进共享 cols，避免未执行 V056 的冻结库
+         （pre-V037 兼容模式）连核心产物查询都失败；分享功能本身要求已迁移。 -->
+    <sql id="shareCols" databaseId="ainative-source-aware">
+        id, tenant_id, source_type, workitem_id, dispatch_id, name, type, oss_ref, size, meta_json,
+        external_share_ref, gmt_create
+    </sql>
+    <sql id="shareCols" databaseId="ainative-legacy">
+        id, tenant_id, 'WORKITEM' AS source_type, workitem_id, dispatch_id, name, type, oss_ref, size, meta_json,
+        external_share_ref, gmt_create
+    </sql>
+
+    <insert id="insert" parameterType="com.ainative.artifact.ArtifactDO"
+            databaseId="ainative-source-aware"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO artifact (tenant_id, source_type, workitem_id, dispatch_id, name, type,
+            oss_ref, size, meta_json)
+        VALUES (#{tenantId}, #{sourceType}, #{workitemId}, #{dispatchId}, #{name}, #{type},
+            #{ossRef}, #{size}, #{metaJson})
+        ON DUPLICATE KEY UPDATE
+            id = LAST_INSERT_ID(id),
+            source_type = VALUES(source_type),
+            workitem_id = VALUES(workitem_id),
+            type = VALUES(type),
+            oss_ref = VALUES(oss_ref),
+            size = VALUES(size),
+            meta_json = VALUES(meta_json)
+    </insert>
+    <insert id="insert" parameterType="com.ainative.artifact.ArtifactDO"
+            databaseId="ainative-legacy"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO artifact (tenant_id, workitem_id, dispatch_id, name, type,
+            oss_ref, size, meta_json)
+        VALUES (#{tenantId}, #{workitemId}, #{dispatchId}, #{name}, #{type},
+            #{ossRef}, #{size}, #{metaJson})
+        ON DUPLICATE KEY UPDATE
+            id = LAST_INSERT_ID(id),
+            workitem_id = VALUES(workitem_id),
+            type = VALUES(type),
+            oss_ref = VALUES(oss_ref),
+            size = VALUES(size),
+            meta_json = VALUES(meta_json)
+    </insert>
+    <select id="findById" resultMap="artifactMap">
+        SELECT <include refid="cols"/> FROM artifact WHERE id = #{id} LIMIT 1
+    </select>
+    <select id="findWorkitemByTenantAndId" databaseId="ainative-source-aware" resultMap="artifactMap">
+        SELECT <include refid="cols"/> FROM artifact
+        WHERE tenant_id = #{tenantId} AND source_type = 'WORKITEM' AND id = #{id}
+        LIMIT 1
+    </select>
+    <select id="findWorkitemByTenantAndId" databaseId="ainative-legacy" resultMap="artifactMap">
+        SELECT <include refid="cols"/> FROM artifact
+        WHERE tenant_id = #{tenantId} AND id = #{id}
+        LIMIT 1
+    </select>
+    <select id="findBySourceAndId" databaseId="ainative-source-aware" resultMap="artifactMap">
+        SELECT <include refid="cols"/> FROM artifact
+        WHERE tenant_id = #{tenantId} AND source_type = #{sourceType}
+          AND workitem_id = #{sourceId} AND id = #{id}
+        LIMIT 1
+    </select>
+    <select id="listBySource" databaseId="ainative-source-aware" resultMap="artifactMap">
+        SELECT <include refid="cols"/> FROM artifact
+        WHERE tenant_id = #{tenantId} AND source_type = #{sourceType}
+          AND workitem_id = #{sourceId}
+        <if test="type != null">AND type = #{type}</if>
+        <choose>
+            <when test="type != null">ORDER BY id ASC</when>
+            <otherwise>ORDER BY id DESC</otherwise>
+        </choose>
+    </select>
+    <select id="listByWorkitem" databaseId="ainative-source-aware" resultMap="artifactMap">
+        SELECT <include refid="cols"/> FROM artifact
+        WHERE tenant_id = #{tenantId} AND source_type = 'WORKITEM' AND workitem_id = #{workitemId}
+        ORDER BY id DESC
+    </select>
+    <select id="listByWorkitem" databaseId="ainative-legacy" resultMap="artifactMap">
+        SELECT <include refid="cols"/> FROM artifact
+        WHERE tenant_id = #{tenantId} AND workitem_id = #{workitemId}
+        ORDER BY id DESC
+    </select>
+    <select id="listByWorkitemAndType" databaseId="ainative-source-aware" resultMap="artifactMap">
+        SELECT <include refid="cols"/> FROM artifact
+        WHERE tenant_id = #{tenantId} AND source_type = 'WORKITEM'
+          AND workitem_id = #{workitemId} AND type = #{type}
+        ORDER BY id ASC
+    </select>
+    <select id="listByWorkitemAndType" databaseId="ainative-legacy" resultMap="artifactMap">
+        SELECT <include refid="cols"/> FROM artifact
+        WHERE tenant_id = #{tenantId}
+          AND workitem_id = #{workitemId} AND type = #{type}
+        ORDER BY id ASC
+    </select>
+    <select id="listByDispatch" resultMap="artifactMap">
+        SELECT <include refid="cols"/> FROM artifact
+        WHERE tenant_id = #{tenantId} AND dispatch_id = #{dispatchId}
+        ORDER BY id DESC
+    </select>
+    <delete id="deleteById" databaseId="ainative-source-aware">
+        DELETE FROM artifact
+        WHERE tenant_id = #{tenantId} AND source_type = 'WORKITEM' AND id = #{id}
+    </delete>
+    <delete id="deleteById" databaseId="ainative-legacy">
+        DELETE FROM artifact
+        WHERE tenant_id = #{tenantId} AND id = #{id}
+    </delete>
+    <delete id="deleteBySourceAndId" databaseId="ainative-source-aware">
+        DELETE FROM artifact
+        WHERE tenant_id = #{tenantId} AND source_type = #{sourceType}
+          AND workitem_id = #{sourceId} AND id = #{id}
+    </delete>
+
+    <select id="listUsageArtifacts" resultMap="artifactMap">
+        SELECT <include refid="cols"/> FROM artifact
+        WHERE tenant_id = #{tenantId}
+          AND (name = #{usageName} OR name LIKE CONCAT('%/', #{usageName}))
+          AND dispatch_id IS NOT NULL
+        ORDER BY id ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <update id="markExternalExposed">
+        UPDATE artifact SET external_exposed = 1, external_share_ref = #{externalShareRef}
+        WHERE tenant_id = #{tenantId} AND workitem_id = #{workitemId} AND id = #{id}
+          AND external_share_ref IS NULL
+    </update>
+    <select id="listExternalExposed" resultMap="artifactMap">
+        SELECT <include refid="shareCols"/> FROM artifact
+        WHERE tenant_id = #{tenantId} AND workitem_id = #{workitemId} AND external_exposed = 1
+        ORDER BY id DESC
+    </select>
+    <select id="findExternalExposed" resultMap="artifactMap">
+        SELECT <include refid="shareCols"/> FROM artifact
+        WHERE tenant_id = #{tenantId} AND workitem_id = #{workitemId} AND id = #{id}
+          AND external_exposed = 1
+        LIMIT 1
+    </select>
+
+</mapper>

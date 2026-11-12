@@ -1,0 +1,88 @@
+{
+  "language": {
+    "switch": "切换语言",
+    "syncFailed": "语言偏好保存失败，当前选择仍在此浏览器中生效。"
+  },
+  "overlay": {
+    "close": "关闭"
+  },
+  "appearance": {
+    "dark": "深色",
+    "light": "浅色",
+    "system": "跟随系统",
+    "switch": "切换外观",
+    "current": "外观：{{mode}}",
+    "scope": "外观仅在当前浏览器生效。",
+    "studio": "主题工作台",
+    "accentSection": "主题颜色",
+    "accentNamed": "{color}",
+    "accentCustom": "自定义颜色",
+    "accentApply": "应用",
+    "accentApplied": "主题颜色已更新",
+    "accentReset": "已恢复跟随平台品牌色",
+    "accentFollowPlatform": "跟随平台",
+    "presetStream": "溪蓝(默认)",
+    "presetJade": "黛青",
+    "presetMoss": "苔绿",
+    "presetIris": "鸢尾紫",
+    "presetOrchid": "兰紫",
+    "presetCinnabar": "朱砂",
+    "presetAmber": "琥珀",
+    "presetSand": "沙金",
+    "presetLinear": "靛蓝",
+    "presetPine": "松绿",
+    "backgroundSection": "自定义背景",
+    "backgroundHint": "上传一张图片作为工作台背景,仅保存在本机浏览器。",
+    "backgroundUpload": "上传图片",
+    "backgroundClear": "移除背景",
+    "backgroundCleared": "已移除自定义背景",
+    "backgroundCurrent": "当前背景预览",
+    "backgroundTint": "背景遮罩",
+    "backgroundTooLarge": "图片处理后仍超过 {limit}KB,请换一张更小的",
+    "backgroundNotImage": "请选择图片文件",
+    "backgroundFailed": "图片处理失败,请换一张试试",
+    "studioNote": "主题颜色与背景仅保存在本机浏览器,不随账号同步;遮罩越淡背景越清晰。",
+    "tintPercent": "{{value}}%"
+  },
+  "account": {
+    "settings": "个人设置",
+    "logout": "退出登录",
+    "menu": "用户菜单",
+    "login": "登录",
+    "expired": "未登录或登录已失效",
+    "networkError": "网络错误"
+  },
+  "workspace": {
+    "switched": "已切换到 {{name}}",
+    "switchFailed": "切换项目失败",
+    "notMember": "你不在该工作项所属项目中",
+    "linkedSwitchFailed": "切换到工作项所属项目失败",
+    "manage": "管理项目...",
+    "unselected": "未选择"
+  },
+  "navigation": {
+    "expand": "展开菜单",
+    "collapse": "折叠菜单",
+    "help": "文档中心",
+    "content": "页面内容",
+    "tree": "导航树",
+    "commandPalette": "命令面板",
+    "commandPaletteSearch": "搜索工作项、运行器、文档…",
+    "paletteEmpty": "没有匹配的跳转目标",
+    "paletteHint": "↑↓ 选择 · ↵ 打开 · esc 关闭",
+    "docsHint": "在新标签页打开文档中心",
+    "kbdDocs": "F1",
+    "kbdSettings": "⌘,",
+    "kbdPalette": "⌘K",
+    "projectIdPrefix": "#",
+    "statusProj": "proj: ",
+    "versionPrefix": "v"
+  },
+  "duration": {
+    "second_other": "{{count}}秒",
+    "minute_other": "{{count}}分钟",
+    "hour_other": "{{count}}小时",
+    "remainderMinute_other": "{{count}}分",
+    "hoursMinutes": "{{hours}}{{minutes}}"
+  }
+}

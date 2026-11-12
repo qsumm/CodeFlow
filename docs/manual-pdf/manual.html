@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>CodeFlow 用户操作手册 v1.2.0</title>
+<meta name="author" content="CodeFlow">
+<meta name="description" content="CodeFlow 从需求到交付一站式 AI 平台用户操作手册:工作项交付、禅道闭环、运行器、MCP、主题工作台、平台配置">
+<style>
+:root {
+  --accent:#2383e2; --ink:#1c2330; --muted:#5a6474; --line:#dde3ec; --bg:#ffffff;
+}
+@page {
+  size: A4;
+  margin: 22mm 18mm 20mm 18mm;
+  @bottom-center { content: counter(page) " / " counter(pages);
+                   font-family:"Hiragino Sans GB",sans-serif; font-size:9pt; color:#5a6474; }
+  @bottom-left { content: "CodeFlow · 用户操作手册";
+                 font-family:"Hiragino Sans GB",sans-serif; font-size:8.5pt; color:#8a94a4; }
+  @bottom-right { content: "v1.2.0 · 2026-11";
+                  font-family:"Hiragino Sans GB",sans-serif; font-size:8.5pt; color:#8a94a4; }
+}
+@page cover { margin:0; @bottom-center{content:none} @bottom-left{content:none} @bottom-right{content:none} }
+html,body { margin:0; padding:0; background:#ffffff; }
+body { font-family:"Hiragino Sans GB","PingFang SC",sans-serif; color:var(--ink);
+       font-size:10.5pt; line-height:1.72; }
+.cover { page: cover; width:210mm; height:296mm; background:#0e0f11; color:#f0f2f6;
+         position:relative; overflow:hidden; page-break-after:always;
+         background-image:radial-gradient(circle 700px at 82% 8%, rgba(60,120,255,.16), transparent 60%),
+                          radial-gradient(circle 600px at 0% 100%, rgba(60,120,255,.10), transparent 60%),
+                          linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+                          linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+         background-size:auto,auto,64px 64px,64px 64px; }
+.cover .inner { padding:26mm 20mm; height:100%; display:flex; flex-direction:column; }
+.cover .kicker { font-size:13px; letter-spacing:7px; color:#8fa8d8; margin-top:6mm; }
+.cover .rule { width:52px; height:2px; background:#3c78ff; margin:8mm 0 10mm; }
+.cover .brand { font-size:56pt; font-weight:700; letter-spacing:1px; }
+.cover .brand .ai { color:#3c78ff; }
+.cover .subtitle { font-size:21pt; font-weight:600; margin-top:9mm; color:#e8ecf4; }
+.cover .sub-en { font-size:10pt; color:#7a8699; letter-spacing:2px; margin-top:3mm; }
+.cover .summary { font-size:11.5pt; line-height:1.85; color:#a9b4c6; margin-top:14mm; max-width:150mm; }
+.cover .meta { margin-top:auto; display:flex; gap:12mm; padding-top:8mm;
+               border-top:1px solid rgba(255,255,255,.10); }
+.cover .meta .k { font-size:8.5pt; color:#6b7688; letter-spacing:2px; margin-bottom:2mm; }
+.cover .meta .v { font-size:11.5pt; color:#dde3ee; }
+h1.doc-title { display:none; }
+h2 { font-size:17pt; color:var(--accent); border-bottom:2px solid var(--accent);
+     padding-bottom:5px; margin:26pt 0 12pt; page-break-after:avoid; }
+h2:first-of-type { margin-top:0; }
+h3 { font-size:13pt; margin:16pt 0 8pt; color:var(--ink); page-break-after:avoid; }
+p { margin:6pt 0; }
+ul,ol { margin:6pt 0 6pt 18pt; padding:0; }
+li { margin:3pt 0; }
+code { font-family:Menlo,monospace; font-size:8.8pt; background:#f1f4f9;
+       border:1px solid var(--line); border-radius:3px; padding:1px 5px; color:#244a80; }
+pre { background:#f6f8fb; border:1px solid var(--line); border-radius:6px; padding:10pt 12pt;
+      page-break-inside:avoid; overflow-wrap:break-word; }
+pre code { background:none; border:none; padding:0; }
+blockquote { margin:8pt 0; padding:8pt 14pt; background:#f1f6ff; border-left:3px solid var(--accent);
+             color:#33415c; page-break-inside:avoid; }
+blockquote p { margin:0; }
+table { width:100%; border-collapse:collapse; margin:10pt auto; page-break-inside:avoid;
+        font-size:9.5pt; }
+th { background:#eef3fb; text-align:left; font-weight:600; }
+th,td { border:1px solid var(--line); padding:6pt 8pt; vertical-align:top;
+        overflow-wrap:anywhere; }
+table tr td:first-child, table tr th:first-child { white-space:normal; }
+/* 修订记录等宽表:允许收缩 */
+table { table-layout:auto; word-break:break-word; }
+figure { margin:12pt 0 4pt; page-break-inside:avoid; text-align:center; }
+figure img { max-width:92%; width:auto; border:1px solid var(--line); border-radius:6px;
+             box-shadow:0 1px 4px rgba(20,40,80,.08); }
+figcaption { text-align:center; font-size:8.8pt; color:var(--muted); margin-top:5pt;
+             margin-bottom:14pt; }
+.toc { page-break-after:always; }
+.toc h2 { border:none; margin-bottom:14pt; }
+.toc ul { list-style:none; margin-left:0; }
+.toc li { margin:5pt 0; font-size:10.5pt; }
+.toc li::before { content:""; color:var(--accent); margin-right:6pt; }
+h2.toc-h { border:none; }
+</style>
+</head><body>
+
+<div class="cover"><div class="inner">
+  <div class="kicker">OPERATION MANUAL</div>
+  <div class="rule"></div>
+  <div class="brand">CODE<span class="ai">FLOW</span></div>
+  <div class="subtitle">用户操作手册</div>
+  <div class="sub-en">从需求到交付 · 一站式 AI 交付平台</div>
+  <div class="summary">写给被交付拖累的团队:需求写了三页,开发理解偏十里;排期等一周,写码只要一天;进度全靠问,交付全靠催;换个人接手,上下文全丢。CodeFlow 把这些痛点变成流水线——你只需把需求说清楚(AI 澄清会帮你问对问题),分析、编码、测试、验证、评审、部署由 AI 成员自动完成,全程留痕、产物归档,人只做澄清与验收。本手册覆盖全部功能页面的操作:工作项交付主线、AI 澄清对话、交付进度跟踪、禅道闭环、运行器与模型接入、MCP 令牌、主题工作台、平台配置与审计,并给出三条推荐工作流与常见问题排查。49 张配图均取自实机。</div>
+  <div class="meta">
+    <div><div class="k">版本</div><div class="v">v1.2.0</div></div>
+    <div><div class="k">日期</div><div class="v">2026-11-12</div></div>
+    <div><div class="k">适用</div><div class="v">CodeFlow 当前构建</div></div>
+  </div>
+</div></div>
+<h1 class="doc-title">19 · 用户操作手册</h1>
+<div class="toc"><h2 class="toc-h">目录</h2><ul><li>目录</li><li>1. 登录与界面结构</li><li>4. 首次使用引导</li><li>4. 记忆外挂(可选 · PowerContext)</li><li>4. 工作空间</li><li>5. 空间级看板</li><li>6. 工作项:从需求到交付的主线</li><li>7. AI 需求澄清对话</li><li>8. 交付进度跟踪:看AI 成员干活</li><li>9. AI 成员与小队</li><li>10. 流水线流程模板</li><li>11. 运行器管理</li><li>12. 仓库与技能</li><li>13. 平台集成:禅道闭环</li><li>14. 消息渠道(钉钉/飞书)</li><li>15. 个人设置与 MCP 令牌</li><li>16. 平台级配置</li><li>17. 交付总览、执行记录与自进化</li><li>18. 帮助中心</li><li>19. 日常怎么用:推荐工作流</li><li>20. 常见问题</li><li>21. PDF 版本</li><li>22. 修订记录</li></ul></div>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/00-cover.png"></figure>
+<blockquote><p>版本:v1.2.0(2026-11-12,与平台版本对齐) · 适用平台:CodeFlow 1.2.0</p></blockquote>
+<blockquote><p>适用读者:使用平台的研发 / 产品 / 测试同学,以及负责接入禅道与运行器的管理员</p></blockquote>
+<blockquote><p>配图:共 49 张(v1.3 新增 3 张);v1.2 大改版要点见修订记录</p></blockquote>
+<blockquote><p>本次大改版要点:登录页 TestOPS editorial 背景 + 价值链动效;全站墨色横幅设计系统;</p></blockquote>
+<blockquote><p>左树导航图标按语义动效;主题工作台(换色/自定义背景);运行器启动命令三模式;</p></blockquote>
+<blockquote><p>v1.3:关于平台「交付 9 号线」地铁图;交付总览 KPI 八卡同构;通知渠道飞书选中态。v1.2:登录页价值链动效;主题工作台;启动命令三模式;AI 管家;34px 对齐</p></blockquote>
+<h2>目录</h2>
+<ol><li><a href="#1-登录与界面结构">登录与界面结构</a></li><li><a href="#2-工作空间">工作空间</a></li><li><a href="#3-总览大盘">总览大盘</a></li><li><a href="#4-工作项从需求到交付的主线">工作项:从需求到交付的主线</a></li><li><a href="#5-ai-需求澄清对话">AI 需求澄清对话</a></li><li><a href="#6-交付进度跟踪看AI 成员干活">交付进度跟踪:看AI 成员干活</a></li><li><a href="#7-AI 成员与小队">AI 成员与小队</a></li><li><a href="#8-sdlc-流程模板">流水线流程模板</a></li><li><a href="#9-运行器管理">运行器管理</a></li><li><a href="#10-仓库与技能">仓库与技能</a></li><li><a href="#11-平台集成禅道闭环">平台集成:禅道闭环</a></li><li><a href="#12-消息渠道钉钉飞书">消息渠道(钉钉/飞书)</a></li><li><a href="#13-个人设置与-mcp-令牌">个人设置与 MCP 令牌</a></li><li><a href="#14-平台级配置">平台级配置</a></li><li><a href="#15-洞察定时任务与审计">洞察、定时任务与审计</a></li><li><a href="#16-帮助中心">帮助中心</a></li><li><a href="#17-日常怎么用推荐工作流">日常怎么用:推荐工作流</a></li><li><a href="#18-常见问题">常见问题</a></li><li><a href="#19-修订记录">修订记录</a></li></ol>
+<h2>1. 登录与界面结构</h2>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/01-login.png"></figure>
+<figcaption>图1　登录页(左:品牌与价值区「光点推进链」;右:登录表单)</figcaption>
+<ul><li>首次部署通过 <code>http://&lt;平台地址&gt;:7001/register</code> 注册首个用户,<strong>建组织即成为管理员</strong>;之后所有成员从登录页进入。</li><li>登录页背景为 TestOPS editorial 风格:纸底 + 双光晕 + 流星层;左侧展示平台价值——</li></ul>
+<p>  九段生命周期「光点推进链」(需求澄清 → 启动 → 开发 → 验证 → 部署 → 测试 → 交付),</p>
+<p>  光点走过一段点亮一段,配合轮播的价值主张;右侧为登录表单。</p>
+<ul><li>登录页固定亮色,不随主题变化;语言跟随浏览器,可在登录后右上角切换。</li></ul>
+<p>登录后的整体布局:</p>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/03-workspaces.png"></figure>
+<figcaption>图2　工作空间选择页(登录后第一站)</figcaption>
+<table><thead><tr><th>区域</th><th>说明</th></tr></thead><tbody><tr><td>顶栏</td><td>品牌 → 当前项目 / 路径(如 <code>演示项目 / workitems</code>)→ ⌘K 命令面板 → 项目切换 → 通知 → <strong>主题工作台</strong> → 用户菜单</td></tr><tr><td>左侧导航树</td><td>按「交付 → 分析 → 自动化 → 资产 → 项目」分组的树状导航;每个图标按自身语义有专属动效(悬浮眨两下、选中敲一下)</td></tr><tr><td>内容区</td><td>各功能页;列表类页面为「墨色横幅 + 速览徽章 + 工具栏 + 内容面板」的统一骨架</td></tr><tr><td>底部状态栏</td><td>命令面板入口 / 当前项目 / 语言切换 / 明暗外观切换 / 平台版本</td></tr></tbody></table>
+<h3>1.1 主题工作台(右上角 🎨)</h3>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/62-theme-studio.png"></figure>
+<figcaption>图32　主题工作台(预设色板 + 自定义色 + 自定义背景)</figcaption>
+<ul><li><strong>主题颜色</strong>:10 个精选预设(溪蓝/黛青/苔绿/鸢尾紫/朱砂/琥珀/沙金/靛蓝/松绿),或用取色器自定义;「跟随平台」恢复品牌色。切换即时生效,链接/高亮/选中态/图表全部跟随;</li><li><strong>自定义背景</strong>:上传本地图片作为工作台壁纸(前端自动压缩,超 1.2MB 拒绝),「背景遮罩」滑杆实时调节清晰度与可读性;仅保存在本机浏览器,不随账号漫游;</li><li>明暗模式(☀/🌙/🖥)在旁边的「切换外观」按钮,与主题色独立组合。</li></ul>
+<h2>4. 首次使用引导</h2>
+<p>第一次登录并选择工作空间后,系统自动进入 4 步引导页(<code>/onboarding</code>,可随时跳过,也能从「关于平台」页重放):</p>
+<table><thead><tr><th>步</th><th>内容</th><th>要点</th></tr></thead><tbody><tr><td>1 认识模型</td><td>「需求进 · 交付出」的流水线示意</td><td>记住关键认知:AI 成员由你部署的<strong>运行器</strong>驱动,不在浏览器里</td></tr><tr><td>2 跑起运行器(必做)</td><td>可复制的启动代码块 + 实时探测</td><td>在「运行器」页注册拿到 ID/Token → 机器上配 env → 启动 daemon;本页每 3 秒自动探测,<strong>状态变绿即可继续</strong></td></tr><tr><td>3 认识预置阵容</td><td>开发与评审小队、两个AI 成员、两套 流水线模板</td><td>开箱可用;自定义小队 / AI 生成流程 / 登记仓库为可选</td></tr><tr><td>4 打通需求源</td><td>禅道绑定三要素 + 测试连接</td><td>可选:跳过也能直接「新建工作项」体验交付</td></tr></tbody></table>
+<ul><li>引导状态保存在浏览器本地;换浏览器或清除存储后会再次出现,点「完成」即不再提示。</li><li>未配置运行器时点「跳过引导」会二次确认(防止新手漏掉关键一步)。</li></ul>
+<h2>4. 记忆外挂(可选 · PowerContext)</h2>
+<p>平台可选接入 <a href="https://github.com/oceanbase/powercontext">PowerContext</a>(Apache 2.0 的 AI Agent 上下文服务),为AI 成员提供<strong>跨工作项记忆</strong>:dispatch 开工前自动注入历史决策/约束,交付后写回本次关键结论。不配置即完全关闭,零影响。</p>
+<p><strong>配置</strong>(运行器 runtime 的 env,见 <code>.env</code> 模板):</p>
+<table><thead><tr><th>变量</th><th>说明</th></tr></thead><tbody><tr><td><code>POWERCONTEXT_BASE_URL</code></td><td>PowerContext Server 地址(如 <code>http://127.0.0.1:8077</code>);不配 = 关闭</td></tr><tr><td><code>POWERCONTEXT_TIMEOUT_SEC</code></td><td>HTTP 超时,默认 8s</td></tr><tr><td><code>POWERCONTEXT_REMEMBER</code></td><td>是否写回(默认 1)</td></tr></tbody></table>
+<p><strong>工作方式</strong>:CodeFlow 工作空间 ID ↔ PowerContext Scope 一次性绑定(<code>bind_workspace</code>)后,每次派发:①<code>/v1/context/prepare</code> 有界召回 → 写入交付目录 <code>powercontext-context.md</code> 随 prompt 注入(内容自带「资料非指令」信任边界声明);②交付成功后摘要写回 Memory(幂等键=dispatch ID)。<strong>所有失败静默降级,绝不阻断交付</strong>。</p>
+<h2>4. 工作空间</h2>
+<ul><li>登录后先选<strong>工作空间</strong>;工作项、小队、流水线、运行器、连接等所有业务数据都归属某个工作空间。</li><li>管理员可在「成员」页邀请新成员并分配角色;一个用户可属于多个工作空间,顶部标签页可随时切换(我的工作空间 / 所有工作空间)。</li><li>「空间级看板」提供跨页面的汇总视角(AI 成员数、工作项交付量、Credits 消耗分析):</li></ul>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/05-dashboard.png"></figure>
+<figcaption>图4　空间级看板(交付量与成本消耗汇总)</figcaption>
+<p>⚠ 工作空间删除会级联影响其下工作项与配置,属高危操作,请先在「回收站/备份」确认后再执行。</p>
+<h2>5. 空间级看板</h2>
+<p>入口:登录后「选择项目」页第三个页签「空间级看板」(深链 <code>/workspaces/dashboard</code>);项目内的总览走「项目总览」(见 §17)。</p>
+<p>大盘回答三个问题:<strong>现在有多少活、干到哪了、谁在干</strong>。工作项按状态分列(待处理 / 执行中 / 待决策 / 已完成),异常派发直接在卡片上标红。</p>
+<p>日常读法:</p>
+<ol><li>先看「执行中」列有没有 <code>异常</code> 红标——那是需要人工介入的派发;</li><li>再看「待决策」列——那是等你拍板的工作项(澄清回复、验收);</li><li>「已完成」列看今天交付了什么。</li></ol>
+<h2>6. 工作项:从需求到交付的主线</h2>
+<h3>4.1 工作项列表</h3>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/06-workitem-list.png"></figure>
+<figcaption>图5　工作项看板(状态分列卡片式)</figcaption>
+<table><thead><tr><th>元素</th><th>说明</th></tr></thead><tbody><tr><td>范围页签</td><td>全部 / 待我决策 / 我创建的 / 指派给我的 / 我关注的 / 我参与的</td></tr><tr><td>类型/状态筛选</td><td>按工作项类型(需求/缺陷)与状态节点过滤</td></tr><tr><td>搜索框</td><td>按工作项 ID 或标题搜索</td></tr><tr><td>标签筛选 / 高级筛选</td><td>组合条件;高级筛选支持优先级、创建者等更多维度</td></tr><tr><td>卡片</td><td>类型、状态、优先级、标题、创建者、当前处理人;<strong>外部来源工作项带「来自 ZenTao」链接</strong>,点击直达禅道原始对象</td></tr><tr><td>视图切换</td><td>看板 / 列表 / 表格三种视图</td></tr></tbody></table>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/50-workitem-advanced-filter.png"></figure>
+<figcaption>图6　工作项高级筛选</figcaption>
+<h3>4.2 新建工作项</h3>
+<p>入口:工作项页右上角「+ 新建工作项」。</p>
+<p>必填:<strong>类型</strong>(需求/缺陷)、<strong>标题</strong>、<strong>需求/设计文档</strong>(Markdown);可选:优先级。</p>
+<p>创建后进入工作项详情页。工作项支持上传需求/设计上下文附件(任意类型,单个 5MB、总共 20MB,可粘贴截图)。</p>
+<h3>4.3 工作项详情</h3>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/08-workitem-detail.png"></figure>
+<figcaption>图7　工作项详情(新建工作项)</figcaption>
+<table><thead><tr><th>元素</th><th>说明</th></tr></thead><tbody><tr><td>元信息条</td><td>类型 / 状态 / 优先级 / 创建者 / 处理人 / 标签,状态与标签可直接改</td></tr><tr><td>启动交付</td><td>指派AI 成员并按流水线 启动自动交付(见 §4.4)</td></tr><tr><td>指派真人 / 流转状态</td><td>人工接棒与状态流转</td></tr><tr><td>需求/设计文档</td><td>Markdown 编辑;外部来源工作项只读并显示「由外部工作项维护」</td></tr><tr><td>评论 &amp; 时间线</td><td>全部沟通与系统事件(创建/流转/派发/交接/回写)按时间倒序</td></tr><tr><td>右栏</td><td>AI 需求澄清(§5)、任务信息、交付进度跟踪(§6)</td></tr><tr><td>分享</td><td>生成只读分享链接(产物页无需登录可看)</td></tr></tbody></table>
+<p>外部来源工作项(禅道拉取)在标题下显示来源标识,删除受保护——<strong>必须回禅道处理,平台侧不可删</strong>。</p>
+<p>下面是一个真实交付中的工作项:左侧是需求正文(由外部工作项维护,只读),右栏是实时交付进度:</p>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/40-workitem-detail-real.png"></figure>
+<figcaption>图8　真实交付中的工作项(外部来源 + 右栏实时交付面板)</figcaption>
+<p>发评论的即时反馈(左下角「评论已发送」提示):</p>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/08b-workitem-comment.png"></figure>
+<figcaption>图9　发表评论成功</figcaption>
+<h3>4.4 启动交付(把活交给AI 成员)</h3>
+<ol><li>点「启动交付」→ 右栏进入「AI 需求澄清」向导,选择小队与AI 成员;</li><li>确认后平台创建派发(dispatch),工作项进入「执行中」;</li><li>运行器在线时立即开始跑流水线;离线则排队等待并显示原因(§6)。</li></ol>
+<p>交付开启后,工作项右上出现「关闭交付」;关闭后不再接受新的自动派发,评论区 @ AI 成员也会被拦截提示。</p>
+<h3>4.5 删除与回收站</h3>
+<p>删除工作项进入回收站(左侧导航垃圾桶图标),可恢复;外部来源工作项不可删除。</p>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/31-recycle-bin.png"></figure>
+<figcaption>图10　工作项回收站</figcaption>
+<h2>7. AI 需求澄清对话</h2>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/43-workitem-clarify.png"></figure>
+<figcaption>图11　工作项详情右栏的 AI 需求澄清向导</figcaption>
+<ul><li><strong>启动交付前</strong>:右栏「AI 需求澄清」进入向导,按小队 → AI 成员两级选择交付主体;</li><li><strong>交付中</strong>:直接在评论区 <code>@AI 成员</code> 提问,AI 成员经平台 MCP <strong>实时读取工作项内容</strong>后作答与追问,形成澄清会话;</li><li>AI 成员的每次回复都带用量(模型/Token)与耗时,可在时间线追溯。</li></ul>
+<p><strong>发送方式可切换</strong>:输入框旁的入口标明当前模式——默认 Shift+回车 发送(回车换行),可切为回车发送;切换会写入个人偏好,重新登录后保持。回复进行中输入框会禁用并显示动态指示,可随时「终止响应」;每条回复都带用量与耗时。</p>
+<p>⚠ 需求描述写不清是交付返工的最大来源。建议启动交付前先用澄清对话把验收标准对齐——这比事后返工便宜得多。</p>
+<h2>8. 交付进度跟踪:看AI 成员干活</h2>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/41-workitem-delivery-tracking.png"></figure>
+<figcaption>图12　交付进度跟踪面板(当前派发 + 历史执行)</figcaption>
+<table><thead><tr><th>元素</th><th>说明</th></tr></thead><tbody><tr><td>当前派发卡</td><td>AI 成员 / 流水线步骤 / 状态(含 失败 红标)/ Dispatch ID / 耗时 / 运行器名</td></tr><tr><td>查看执行</td><td>打开该派发的实时执行视图(终端/日志)</td></tr><tr><td>重试</td><td>失败后原样重发</td></tr><tr><td>历史执行</td><td>全部执行记录(含交接产生的下游派发),可看执行详情</td></tr><tr><td>控制记录</td><td>指派 / 暂停 / 恢复 / 停止等人工操作留痕</td></tr><tr><td>流水线阶段耗时 / 近期动作</td><td>每一步耗时与最新进展</td></tr><tr><td>产物</td><td>AI 成员产出的文件(deliverables),可直接下载</td></tr><tr><td>执行过程 Graph</td><td>步骤与交接的图形化视图</td></tr></tbody></table>
+<p><strong>排队原因会明说</strong>:运行器不在线时派发不会空转,而是按指数退避等待,面板直接显示原因(如&quot;等待运行器上线&quot;)与最近一次尝试;运行器上线后自动唤醒,无需人工重发。</p>
+<p><strong>失败了就地重试</strong>:某次派发失败(模型配额、基础设施中断等)时,面板给出「重试」按钮,原样重发一次并记为新 attempt,前几轮执行记录全部保留可查:</p>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/10-dispatch-retry.png"></figure>
+<figcaption>图13　失败派发的重试:历史执行里前几轮失败(红标),修复后重发的新执行接续跑完四步并交付(实拍自工单 #10047)</figcaption>
+<p>⚠ <strong>人工介入</strong>:若AI 成员卡在需要判断的地方(如评审不通过但环境无法满足某项通过条件),在工作项评论区留下澄清意见并说明判定口径,下一轮派发会读到这条意见继续——这是解开僵局的标准动作,不用改配置、不用重建派发。</p>
+<h2>9. AI 成员与小队</h2>
+<p>入口:左侧导航 → AI 成员(<code>/#/agents</code>)。</p>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/12-agents.png"></figure>
+<figcaption>图14　AI 成员管理(AI 成员 / 版本审核 / 小队三个页签)</figcaption>
+<ul><li><strong>AI 成员</strong>:一个可执行的角色(如&quot;前后端全栈开发&quot;),绑定客户端类型(Claude Code / Codex CLI / Cursor CLI / Gemini CLI / Qoder CLI 等)与模型;</li><li><strong>版本审核</strong>(<code>/agents/reviews</code>):AI 成员配置的变更走版本化,提交后在此页审核,通过才进入上线流转——防止未评审的改动直接跑生产;</li><li><strong>小队</strong>:多个AI 成员 + 角色构成 + 关联流水线 组成交付阵型。</li></ul>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/44-squad-detail.png"></figure>
+<figcaption>图15　小队详情(AI 成员阵容 / 角色构成 / 流水线流程)</figcaption>
+<p>小队卡片的「0/3 在线」徽标 = 该小队当前在线的运行器数 / 运行器总数。评审不通过时按稳定问题清单返工,是小队的默认协作方式。</p>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/46-agent-detail.png"></figure>
+<figcaption>图16　AI 成员详情</figcaption>
+<h2>10. 流水线流程模板</h2>
+<p>入口:左侧导航 → 流水线(<code>/#/sdlcs</code>)。</p>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/45-sdlc-detail.png"></figure>
+<figcaption>图17　流水线流程模板(流程模板 / 模版间 / 小队工作流)</figcaption>
+<table><thead><tr><th>元素</th><th>说明</th></tr></thead><tbody><tr><td>流程模板</td><td>一次交付的步骤序列(如:分析与分支准备 → 编码与测试 → 验证与交付 → 交接评审),每步含目标、完成门、要求产物</td></tr><tr><td>模版间</td><td>模板之间的衔接(开发完成后接评审模板)</td></tr><tr><td>小队工作流</td><td>小队视角的流程编排</td></tr><tr><td>新建 / AI 生成</td><td>手工建,或用 AI 从描述生成初稿;<strong>AI 生成的流程落库为草稿(DRAFT),需到 流水线列表显式启用后才会生效</strong></td></tr></tbody></table>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/59-sdlc-generate.png"></figure>
+<figcaption>图18　AI 生成流程(生成草稿后显式启用)</figcaption>
+<p>「详情」里可以逐步查看/编辑步骤定义;工作项启动交付时选择的流水线 决定AI 成员按什么路径干活。</p>
+<h2>11. 运行器管理</h2>
+<p>入口:左侧导航 → 运行器(<code>/#/executors</code>)。</p>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/13-executors.png"></figure>
+<figcaption>图19　运行器管理(按编队分组;展开见各运行器)</figcaption>
+<table><thead><tr><th>元素</th><th>说明</th></tr></thead><tbody><tr><td>新建运行器</td><td>归属 AI 成员 / 客户端类型(六种卡片单选)/ 并发数 / 记忆模式(Qoder 系含模型三项);创建成功弹窗直接给令牌与启动命令</td></tr><tr><td>运行方式三档</td><td>启动命令弹窗与创建成功弹窗都可切:<strong>前台运行</strong>(调试,关终端即停)/<strong>后台挂起</strong>(nohup,崩溃不自愈)/<strong>系统服务</strong>(install-service,崩溃自愈 + 开机自启,推荐)</td></tr><tr><td>复制入口×2</td><td>启动命令弹窗与创建成功弹窗都按当前选中的运行方式出命令;复制后贴到运行器机器执行即可</td></tr><tr><td>卸载系统服务</td><td><code>ymai-codeflow uninstall-service --executor-id &lt;id&gt;</code></td></tr><tr><td>自动升级</td><td>开启后运行器版本落后自动升级;「一键全量更新」按编队批量升级到平台推荐版本</td></tr><tr><td>分组视图</td><td>按编队 / 按 AI 成员分组;按编队筛选后看目标运行器</td></tr><tr><td>在线状态</td><td>心跳判活 + 最近启动时间;离线的运行器其排队派发会显示等待原因</td></tr><tr><td>运行器详情</td><td>抽屉查看主机名/IP/版本/模型/最近启动/重启记录</td></tr></tbody></table>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/61-executor-startup-modes.png"></figure>
+<figcaption>图33　启动命令弹窗(运行方式切到「系统服务」,命令实时重生成)</figcaption>
+<p>⚠ <strong>同一个 executorId+token 同时只允许一个 daemon 实例</strong>——后来者会把先来者顶下线。看到状态反复&quot;在线/离线&quot;抖动,先排查是否两个 daemon 用同一份 env 在跑。</p>
+<p>运行器侧安装与运行(注册、环境变量、接入任意 Anthropic 兼容模型端点)见仓库根 <code>README.md</code> 的「快速开始 B」;守护化细节见 <code>docs/21-运行器运维能力.md</code>。</p>
+<h2>12. 仓库与技能</h2>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/14-repos.png"></figure>
+<figcaption>图20　仓库管理</figcaption>
+<ul><li><strong>仓库</strong>:AI 成员干活的代码仓库,绑定后交付时代码会检出、修改、提交;<strong>关系图</strong>(<code>/repos/map</code>)可视化仓库之间的依赖与调用关系,滚轮缩放、拖动布局、点击查看详情;</li></ul>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/15-skills.png"></figure>
+<figcaption>图21　技能管理</figcaption>
+<ul><li><strong>技能</strong>:可挂到AI 成员上的能力包(MCP 工具集、提示词、脚本),平台内置技能可直接启用,也支持上传自定义包。</li></ul>
+<h2>13. 外部连接:禅道闭环</h2>
+<p>入口:左侧导航 → 禅道集成(<code>/#/integrations</code>)。当前支持 <strong>禅道 ZenTao 18.10+</strong>。</p>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/17-integrations-zentao.png"></figure>
+<figcaption>图22　禅道连接配置</figcaption>
+<h3>11.1 建绑定(三步)</h3>
+<ol><li><strong>禅道连接</strong>:填禅道地址(如 <code>http://zentao.example.com:8888</code>)、集成账号、集成密码;点「测试连接」验证,通过后「加载产品」拉取产品列表;</li><li><strong>选择产品</strong>:选要接入的禅道产品,设轮询间隔(默认 60 秒),保存绑定;</li><li><strong>自动拉取</strong>:平台按间隔轮询该产品的 Bug 与需求,自动建为本地工作项;重复拉取不会产生重复工作项。</li></ol>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/49-zentao-bindings.png"></figure>
+<figcaption>图23　已建绑定列表(产品 / 禅道地址 / 状态)</figcaption>
+<h3>11.2 闭环怎么转</h3>
+<pre><code>
+禅道 Bug/需求 → 平台自动拉取入库 → 指派AI 成员交付 → 交付结论回写禅道
+</code></pre>
+<ul><li>本地工作项流转到完成类节点时,平台自动把禅道 Bug 置为 <strong>resolved(已解决, resolution=fixed)</strong>;需求(Story)对应置 closed;</li><li>交付报告经备注通道回写,幂等 marker 防重复;</li><li>⚠ 禅道的 <strong>closed(关闭)</strong> 设计为&quot;验证后的人工动作&quot;:修复是否真正闭环由你在禅道侧确认后关闭,v1 接口不支持静默关闭;</li><li>身份映射:禅道账号在平台内显示为外部用户(带来源标识);</li><li>绑定级状态映射可配(默认:active→待处理、resolved→待验证、closed→已完成)。</li></ul>
+<p>⚠ 禅道 v1 接口对非法状态转换(如 resolved→active 直接 PUT)会拒绝——平台已按合法转换表处理,但如果你在禅道侧手工改状态导致映射错位,同步会停在「待决策」,到工作项详情处理即可。</p>
+<p>完整闭环实录见 <code>docs/18-禅道闭环E2E总结报告.md</code>。</p>
+<h2>14. 消息渠道(钉钉/飞书)</h2>
+<p>入口:左树「连接」(外部连接),或平台配置 → 协作通知。</p>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/18-integrations-channels.png"></figure>
+<figcaption>图24　消息渠道(外部连接页)</figcaption>
+<ul><li>绑定钉钉/飞书群机器人后,派发进展、交接、评审结论等事件可推送到群;</li><li>支持项目机器人配置;渠道绑定是工作空间级的;</li><li>平台级选中渠道(平台配置 → 协作通知)决定「通知设置」显示哪个 IM 列:选中飞书后每类事件可独立开关「站内信 / 飞书」;启用飞书需先填入飞书开放平台应用 appKey/appSecret。</li></ul>
+<h2>15. 个人设置与 MCP 令牌</h2>
+<p>入口:右上角头像 → 个人设置(<code>/#/profile/settings</code>)。页签:基本信息 / IM 工号 / 企业身份 / <strong>MCP 令牌</strong> / 修改密码 / 账号注销。</p>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/16-mcp-tokens.png"></figure>
+<figcaption>图25　个人设置 → MCP 令牌</figcaption>
+<table><thead><tr><th>元素</th><th>说明</th></tr></thead><tbody><tr><td>MCP 服务地址</td><td><code>http://&lt;平台&gt;/api/mcp/&lt;MCP_TOKEN&gt;/</code>,建令牌时<strong>完整 URL 只展示一次</strong></td></tr><tr><td>开放工具 / 能力聚合</td><td>当前 MCP 面暴露的工具数与能力数</td></tr><tr><td>访问令牌</td><td>令牌列表:名称 / 前缀 / 创建时间 / 最后使用 / 状态</td></tr></tbody></table>
+<p><strong>怎么用</strong>:把 MCP 地址配到你的 Claude Code / Cursor 等 CLI(<code>claude mcp add --transport http ainative &lt;url&gt;</code>),即可在终端里让 AI 直接操作平台:建工作项、查工作项、配置小队、启动交付等。令牌权限跟随你在目标工作空间的权限。</p>
+<p>⚠ 令牌即身份,不要提交进代码库;泄露后在列表里吊销即可,平台侧立即失效。</p>
+<h2>16. 平台级配置</h2>
+<p>入口:左树底部「设置 ⌘,」——打开<strong>设置弹窗</strong>(左类目 + 右内容:AI 配置 / 通知配置 / 系统配置);<code>/#/workspaces/branding</code> 为品牌配置页。</p>
+<table><thead><tr><th>页面</th><th>说明</th></tr></thead><tbody><tr><td>品牌配置</td><td>平台名称 / Logo / 主题色 / 消息渠道,变更即时生效于全平台</td></tr><tr><td>成员与角色</td><td>成员管理(邀请/移除/只读者/Owner 移交)+ 角色管理 + 待审批申请(工作空间访问请求);<code>/settings/members-roles</code> 三页签合一</td></tr><tr><td>角色与权限</td><td>细粒度权限(工作项/集成/平台管理等操作级)</td></tr><tr><td>环境变量</td><td>工作空间级环境变量,AI 成员执行时可读取(值默认脱敏展示)</td></tr><tr><td>状态模板</td><td>工作项状态机模板,定义状态列与合法流转</td></tr><tr><td>备份</td><td>项目配置备份:一键备份当前项目的流水线、AI 成员及版本、小队、仓库关系、记忆、技能等到云端,可恢复</td></tr></tbody></table>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/19-branding.png"></figure>
+<figcaption>图26　平台配置(品牌 / 消息渠道)</figcaption>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/24-env-vars.png"></figure>
+<figcaption>图27　工作空间环境变量</figcaption>
+<h2>17. 项目总览、执行记录与自进化</h2>
+<p><strong>项目总览</strong>(/overview)八张 KPI 卡两排四列、等高同构:每卡「标题 + 大数字 + 至多两行说明」,趋势卡带迷你折线;环比与日均/占比合并一行,口径说明收进标题旁 ⓘ 悬浮(v1.3 统一)。</p>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/64-overview-kpi.png"></figure>
+<figcaption>图64　项目总览——KPI 八卡同构(v1.3)</figcaption>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/21-insights.png"></figure>
+<figcaption>图28　交付洞察</figcaption>
+<ul><li><strong>洞察</strong>:交付效率数据(阶段耗时、参与度、趋势),用于回顾与瓶颈定位;</li><li><strong>定时任务</strong>:Cron 式定时派发(如每日巡检类工作项),每次 Run 有独立记录与日志;</li></ul>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/22-scheduled-tasks.png"></figure>
+<figcaption>图29　定时任务</figcaption>
+<ul><li><strong>审计</strong>:全部敏感操作留痕(谁、何时、对什么、做了什么),支持按操作类型过滤;</li></ul>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/20-audit.png"></figure>
+<figcaption>图30　审计日志</figcaption>
+<ul><li><strong>通知</strong>:站内通知中心;<strong>记忆</strong>:平台记忆管理(AI 成员长期记忆的查看与清理)。</li></ul>
+<h3>15.1 关于平台:生命周期环</h3>
+<p>入口:左树底部「关于平台」。</p>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/63-about-metro.png"></figure>
+<figcaption>图63　关于平台——「交付 9 号线」地铁图(v1.3)</figcaption>
+<ul><li>九段化作地铁 9 号线的九个站:蓝色主线路串起上 5 下 4 站,小列车约 13 秒一班巡航,驶过的站环逐个点亮;</li><li>右上「列车状态」随列车位置播报「即将到达 · 站名(阶段)」并按阶段着色:进行中=蓝、已交付=绿、持续运营=青;</li><li>橙色虚线自「运维」回流「需求澄清」始发站,表达交付完成自动回流下一班;票务行展示当前部署版本;</li><li>页头编辑化版式(ABOUT 眉标 + 细分隔线);窄屏横向滚动看图。</li></ul>
+<h2>18. 文档中心</h2>
+<figure><img src="file:///Users/summer/AINative/docs/images/manual/26-help.png"></figure>
+<figcaption>图31　文档中心</figcaption>
+<ul><li>顶部「文档中心」直达;内容随版本内置,含分步图文与常见操作;</li><li>平台同时内置 <code>ainative</code> MCP 技能包(help/assets),供外部 CLI 客户端加载后获得平台操作指引。</li></ul>
+<h2>19. 日常怎么用:推荐工作流</h2>
+<h3>场景 A:禅道缺陷 → AI 成员修复 → 回写(全自动)</h3>
+<ol><li>管理员一次性完成 §11 的禅道绑定;</li><li>之后禅道新 Bug 会在 ≤ 轮询间隔内自动出现在工作项看板(带「来自 ZenTao」);</li><li>给工作项指派小队并启动交付——之后不需要人守着;</li><li>有澄清问题会停在「待决策」,@ 回复即可;修复完成自动回写禅道。</li></ol>
+<h3>场景 B:平台内需求 → 交付</h3>
+<ol><li>新建工作项,把需求写清楚(或上传设计文档);</li><li>启动交付,选小队;对不清楚的点先用澄清对话对齐;</li><li>在交付进度跟踪里看执行,产物直接下载验收;</li><li>验收不通过 → 评论返工意见 @AI 成员,或重试派发。</li></ol>
+<h3>场景 C:外部 CLI 里操作平台</h3>
+<ol><li>个人设置 → MCP 令牌 → 新建令牌,复制一次性完整 URL;</li><li><code>claude mcp add --transport http ainative &lt;url&gt;</code>;</li><li>在 Claude Code 里直接说&quot;帮我建一个工作项,标题是……&quot;——AI 调平台 MCP 完成。</li></ol>
+<h3>三条实践建议</h3>
+<ul><li><strong>需求写清验收标准</strong>:AI 成员按&quot;完成门&quot;自检,验收标准越明确返工越少;</li><li><strong>别绕过平台改禅道状态</strong>:状态机映射是双向的,手工错位会卡同步;</li><li><strong>运行器保持常驻</strong>:排队派发靠运行器上线自动唤醒,运行器越稳定交付越连贯。</li></ul>
+<h2>20. 常见问题</h2>
+<p><strong>Q:派发一直&quot;排队中&quot;怎么办?</strong></p>
+<p>看交付进度跟踪里的等待原因。<code>等待运行器上线</code> = 运行器没连上(去运行器页看在线状态、检查 daemon 是否存活、是否同 executorId 起了两个实例);<code>运行器容量已满</code> = 在跑的任务太多,等空闲或加运行器。排队有指数退避与上线自动唤醒,不需要手动重发。</p>
+<p><strong>Q:AI 成员交付失败了,先看什么?</strong></p>
+<p>交付进度跟踪 → 失败派发 → 查看执行:日志里通常能看到是模型端点问题(配额/网络)、仓库权限问题还是步骤完成门未达标。修复后点「重试」。</p>
+<p><strong>Q:禅道工作项拉取了但没回写?</strong></p>
+<p>检查三处:绑定是否启用、本地工作项是否流转到了与禅道映射的完成类节点、时间线上回执事件的状态。回执失败会在时间线留痕并自动重试。</p>
+<p><strong>Q:模型能换吗?</strong></p>
+<p>能。运行器侧任意 Anthropic 兼容端点即可(Claude / MiniMax / GLM / Kimi / DeepSeek / 私有模型),改运行器 env 的 <code>ANTHROPIC_BASE_URL</code> / <code>ANTHROPIC_AUTH_TOKEN</code> / <code>ANTHROPIC_MODEL</code> 后重启 daemon。</p>
+<p><strong>Q:MCP 完整令牌 URL 丢了?</strong></p>
+<p>令牌只在创建时展示一次,丢了就吊销重建。列表里的&quot;前缀&quot;只用于辨认。</p>
+<p><strong>Q:工作项删错了?</strong></p>
+<p>回收站恢复。外部来源(禅道)工作项不可删,需回禅道处理。</p>
+<h2>21. PDF 版本</h2>
+<p>本手册随库提供排版后的 PDF 版本:<a href="manual-pdf/CodeFlow-用户操作手册-v1.1.pdf">docs/manual-pdf/CodeFlow-用户操作手册-v1.1.pdf</a>(A4 · 30 页 · 带页眉页脚与页码 · 封面深色版式),HTML 源文件同目录(<code>manual.html</code>),文案修改后可用 Playwright <code>page.pdf()</code> 重新导出。</p>
+<h2>22. 修订记录</h2>
+<table><thead><tr><th>版本</th><th>日期</th><th>说明</th></tr></thead><tbody><tr><td>v1.0</td><td>2026-11-04</td><td>首版。覆盖当前构建全部 28 个页面与关键交互;发布前完成 UI 全量回归 31/31 通过、0 缺陷(含新建工单、评论、删除入回收站、禅道测试连接等写操作用例)。配图 30 张取自实机截图。</td></tr><tr><td>v1.2.0</td><td>2026-11-12</td><td>手册编号对齐平台版本(原 v1.3 内容即本版;对齐规则见 00 号文档 §9)。</td></tr><tr><td>v1.3</td><td>2026-11-12</td><td>交付验证后增补:关于平台改版「交付 9 号线」地铁图(列车巡航/站环点亮/阶段着色状态行/回流虚线,替换生命周期环);交付总览 KPI 八卡同构统一(hint ≤2 行、等高基线);消息渠道补飞书选中态与启用说明。新增截图 3 张,配图 49 张。同批交付验证:性能测试平台与电商网站经平台全流程开发并部署(见 platform/ainative/docs/delivery-verification)。</td></tr><tr><td>v1.2</td><td>2026-11-11</td><td>大改版全量更新:登录页 TestOPS editorial 背景 + 生命周期价值链动效;全站墨色横幅设计系统与 34px 控件对齐;左树分组导航与图标语义动效;<strong>主题工作台</strong>(右上角换色/自定义背景上传/遮罩调节);运行器启动命令<strong>三模式</strong>(前台/后台挂起/系统服务)与双复制入口;关于平台「生命周期环」;效能分析成本卡回归暖橙、信息提示跟随主题色;平台智能体更名「AI 管家」;布尔设置改开关呈现;新增截图 15 张(主题工作台/启动命令三模式/生命周期环/高级筛选/暗色总览等),全量重截旧图。配图 46 张。</td></tr><tr><td>v1.1</td><td>2026-11-04</td><td>全量功能补齐 + 封面重设计:新增交付总览、执行记录、自进化、平台智能体(AI 管家)、成员与角色(三页签)、项目备份、仓库关系图、AI 生成 SDLC、新建定时任务、版本审核流程说明;SSO 完成页与分享页归入 §4/§13 说明;新增深色封面页(品牌/摘要/元信息版式)。配图 32 张。</td></tr></tbody></table>
+</body></html>

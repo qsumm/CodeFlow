@@ -1,0 +1,178 @@
+package com.ainative.artifact;
+
+import com.ainative.common.error.BizException;
+import com.ainative.common.error.ErrorCode;
+import com.ainative.dispatch.DispatchDO;
+import com.ainative.dispatch.DispatchDao;
+import com.ainative.workitem.WorkitemDO;
+import com.ainative.workitem.WorkitemDao;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.transaction.PlatformTransactionManager;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+class ArtifactShareRequestServiceTest {
+    private final ArtifactShareRequestDao requests = mock(ArtifactShareRequestDao.class);
+    private final ArtifactDao artifacts = mock(ArtifactDao.class);
+    private final DispatchDao dispatches = mock(DispatchDao.class);
+    private final WorkitemDao workitems = mock(WorkitemDao.class);
+    private final ExternalArtifactShareService shares = mock(ExternalArtifactShareService.class);
+    private final PlatformTransactionManager transactions = mock(PlatformTransactionManager.class);
+    private final ArtifactShareRequestService service = new ArtifactShareRequestService(
+            requests, artifacts, dispatches, workitems, shares, transactions);
+    private final String digest = "a".repeat(64);
+    private DispatchDO dispatch;
+    private ArtifactShareRequestDO request;
+
+    @BeforeEach
+    void setup() {
+        dispatch = new DispatchDO();
+        dispatch.setId(6L); dispatch.setTenantId(100L); dispatch.setWorkitemId(99L);
+        dispatch.setAgentId(7L); dispatch.setSourceType("WORKITEM"); dispatch.setStatus("RUNNING");
+        when(dispatches.findById(6L)).thenReturn(dispatch);
+        WorkitemDO workitem = new WorkitemDO(); workitem.setId(99L); workitem.setTenantId(100L);
+        when(workitems.findById(99L)).thenReturn(workitem);
+        request = new ArtifactShareRequestDO();
+        request.setId(1L); request.setTenantId(100L); request.setWorkitemId(99L); request.setDispatchId(6L);
+        request.setName("report.md"); request.setSha256(digest); request.setStatus("PENDING");
+        when(requests.find(100L, 6L, "report.md")).thenReturn(request);
+        when(requests.lock(1L)).thenReturn(request);
+        when(requests.listPending(any())).thenReturn(List.of(1L));
+        when(shares.expose(100L, 99L, 6L, null, "report.md", digest))
+                .thenReturn(Map.of("artifactId", 301L, "artifactUrl", "https://example.com/share/301"));
+        when(shares.requestUrl(any(), eq(1L))).thenReturn("https://example.com/share/requests/1");
+    }
+
+    @Test
+    void preUploadRequestReturnsTheSameUrlBeforeAndAfterPublication() {
+        Map<String, Object> result = service.request(100L, 99L, 6L, null, "artifacts/output/report.md", digest.toUpperCase());
+        assertEquals("PENDING", result.get("status"));
+        assertEquals("https://example.com/share/requests/1", result.get("artifactUrl"));
+        verify(requests).insert(argThat(r -> r.getName().equals("report.md") && r.getSha256().equals(digest)));
+        service.processPending(null);
+        verify(requests).retryLater(1L);
+        verify(shares, never()).expose(anyLong(), anyLong(), any(), any(), any(), any());
+        when(shares.expose(100L, 99L, 6L, 301L, null, digest)).thenReturn(Map.of("artifactId", 301L));
+        dispatch.setStatus("SUCCEEDED");
+        Map<String, Object> completed = service.request(100L, 99L, 6L, null, "report.md", digest);
+        assertEquals("SHARED", completed.get("status"));
+        assertEquals(result.get("artifactUrl"), completed.get("artifactUrl"));
+        assertFalse(completed.containsKey("commentId"));
+    }
+
+    @Test
+    void repeatedSuccessEventsOnlyPublishTheSnapshot() {
+        dispatch.setStatus("SUCCEEDED");
+        service.processPending(6L);
+        service.processPending(6L);
+        service.processPending(null);
+        assertEquals("SHARED", request.getStatus());
+        assertEquals(301L, request.getArtifactId());
+        assertNull(request.getCommentId());
+        verify(shares).expose(100L, 99L, 6L, null, "report.md", digest);
+        verify(requests).finish(request);
+    }
+
+    @Test
+    void duplicateDeclarationCannotChangeDigest() {
+        assertThrows(BizException.class, () -> service.request(100L, 99L, 6L, null, "report.md", "b".repeat(64)));
+        verifyNoInteractions(shares);
+    }
+
+    @Test
+    void failsClosedForOtherTenantWorkitemSourceAndInvalidInput() {
+        assertThrows(BizException.class, () -> service.request(101L, 99L, 6L, null, "report.md", digest));
+        assertThrows(BizException.class, () -> service.request(100L, 98L, 6L, null, "report.md", digest));
+        for (String path : List.of("../secret", "/secret", "output/../secret", "a/./b", "a//b", "a\nb")) {
+            assertThrows(BizException.class, () -> service.request(100L, 99L, 6L, null, path, digest));
+        }
+        assertThrows(BizException.class, () -> service.request(100L, 99L, 6L, null, "report.md", null));
+        dispatch.setSourceType("SCHEDULED_TASK_RUN");
+        assertThrows(BizException.class, () -> service.request(100L, 99L, 6L, null, "report.md", digest));
+        verify(requests, never()).insert(any());
+    }
+
+    @Test
+    void artifactIdMustBelongToTheSameDispatch() {
+        ArtifactDO artifact = new ArtifactDO(); artifact.setWorkitemId(99L); artifact.setDispatchId(5L);
+        when(artifacts.findWorkitemByTenantAndId(100L, 301L)).thenReturn(artifact);
+        assertThrows(BizException.class, () -> service.request(100L, 99L, 6L, 301L, null, digest));
+        verify(requests, never()).insert(any());
+    }
+
+    @Test
+    void cancellationAndDigestMismatchNeverCreateComments() {
+        dispatch.setStatus("CANCELED"); service.process(1L);
+        assertEquals("REJECTED", request.getStatus());
+        verifyNoInteractions(shares);
+        request.setStatus("PENDING"); dispatch.setStatus("SUCCEEDED");
+        when(shares.expose(100L, 99L, 6L, null, "report.md", digest))
+                .thenThrow(new BizException(ErrorCode.PARAM_INVALID));
+        service.process(1L);
+        assertEquals("CONTENT_DIGEST_MISMATCH", request.getError());
+    }
+
+    @Test
+    void missingArtifactWaitsForLateUploadThenRejectsWithoutHistoryFallback() {
+        dispatch.setStatus("SUCCEEDED"); dispatch.setGmtModified(new Date());
+        when(shares.expose(100L, 99L, 6L, null, "report.md", digest))
+                .thenThrow(new BizException(ErrorCode.ARTIFACT_NOT_FOUND));
+        service.process(1L); assertEquals("PENDING", request.getStatus());
+        dispatch.setGmtModified(new Date(0));
+        service.process(1L); assertEquals("REJECTED", request.getStatus());
+    }
+
+    @Test
+    void snapshotFailureRollsBackAndLeavesRequestRetryable() {
+        dispatch.setStatus("SUCCEEDED");
+        when(shares.expose(100L, 99L, 6L, null, "report.md", digest))
+                .thenThrow(new IllegalStateException("transient storage failure"));
+        service.process(1L);
+        verify(transactions).rollback(any());
+        verify(requests).retryLater(1L);
+        verify(requests, never()).finish(any());
+        assertEquals("PENDING", request.getStatus());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"zh-CN,digest",
+            "en-US,digest",
+            "zh-CN,mismatch",
+            "en-US,mismatch",
+            "zh-CN,duplicate",
+            "en-US,duplicate",
+            "zh-CN,path",
+            "en-US,path",
+            "zh-CN,canonical",
+            "en-US,canonical"})
+    void requestValidationKeepsRawReceiptAndLocalizesOnlyFreshFailure(String language,String problem) {
+        ArtifactDO artifact=new ArtifactDO(); artifact.setWorkitemId(99L);artifact.setDispatchId(6L);artifact.setName("report.md");
+        when(artifacts.findWorkitemByTenantAndId(100L,301L)).thenReturn(artifact);
+        String diagnostic=switch(problem) {
+            case "digest" -> "分享本轮产物必须提供文件内容的 64 位 SHA-256";
+            case "mismatch" -> "artifactId 与 name 不一致";
+            case "duplicate" -> "本派发同名产物已申请分享另一内容版本，请勿覆盖原申请";
+            case "path" -> "无效的产物路径";
+            default -> "产物路径必须是规范的 output 相对路径";
+        };
+        String english=switch(problem) {
+            case "digest" -> "Sharing an artifact from this dispatch requires its 64-character SHA-256 digest";
+            case "mismatch" -> "artifactId and name do not match";
+            case "duplicate" -> "An artifact with this name has already been requested with different content in this dispatch. Do not overwrite the original request";
+            case "path" -> "Invalid artifact path";
+            default -> "The artifact path must be a canonical path relative to output";
+        };
+        var error=assertThrows(BizException.class,()->service.request(100L,99L,6L,problem.equals("mismatch") ? 301L : null, problem.equals("mismatch") ? "other.md" : problem.equals("path") ? "../raw-secret" : problem.equals("canonical") ? "a//b" : "report.md",problem.equals("digest") ? null : problem.equals("duplicate") ? "b".repeat(64) : digest));
+        assertEquals(ErrorCode.PARAM_INVALID.getCode(),error.getCode());assertEquals(diagnostic,error.getMessage());assertNull(error.getCause());
+        assertEquals("PENDING",request.getStatus());assertEquals(digest,request.getSha256());assertNull(request.getError());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.forLanguageTag(language));
+        try { assertEquals(language.equals("en-US") ? english : diagnostic,com.ainative.common.result.Result.fail(error).getMessage()); }
+        finally { org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext(); }
+    }
+
+}

@@ -1,0 +1,26 @@
+package com.ainative.im;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import java.util.Date;
+
+@Getter
+@Setter
+public class PlatformImChannelConfigDO {
+    private Long id;
+    private String provider;
+    private String purpose;
+    private Integer enabled;
+    private Long routeVersion;
+    private String appKey;
+    private String credentialRef;
+    private String robotCode;
+    private String baseUrl;
+    private Long creatorId;
+    private Long modifierId;
+    private Date gmtCreate;
+    private Date gmtModified;
+    private Integer isDeleted;
+    private Integer version;
+}

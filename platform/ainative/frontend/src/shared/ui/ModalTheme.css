@@ -1,0 +1,150 @@
+/* ===== 弹窗交互形态升级(2026-11-10) =====
+ * 目标:全站 Modal 统一为「墨色面板 + 顶部分隔 + 底部右对齐操作区」,
+ * 与页面横幅同一设计语言;去 AI 味的圆滑浮夸,改为克制的工具面板。
+ */
+
+/* 面板本体:墨色、10px 圆角、发丝边 */
+.ant-modal .ant-modal-content {
+  background: var(--cf-raised);
+  border: 1px solid var(--cf-border);
+  border-radius: 10px;
+  padding: 0;
+  box-shadow: 0 24px 60px -24px rgba(0, 0, 0, .85);
+}
+
+/* 头部:标题左对齐 + 主色竖条呼应页面横幅;关闭钮不抢戏 */
+.ant-modal .ant-modal-header {
+  padding: 16px 20px 12px;
+  background: transparent;
+  border-bottom: 1px solid var(--cf-border);
+  margin-bottom: 0;
+}
+
+.ant-modal .ant-modal-title {
+  font-size: 16px;
+  font-weight: 720;
+  color: var(--cf-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ant-modal .ant-modal-title::before {
+  content: '';
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--cf-accent);
+  flex-shrink: 0;
+}
+
+.ant-modal .ant-modal-close {
+  top: 12px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.ant-modal .ant-modal-close:hover {
+  background: var(--cf-field);
+}
+
+/* 内容区:统一内边距与节奏 */
+.ant-modal .ant-modal-body {
+  padding: 16px 20px;
+  font-size: 13px;
+  color: var(--cf-text);
+}
+
+/* 底部操作区:右对齐、按钮等高、主按钮最后 */
+.ant-modal .ant-modal-footer {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--cf-border);
+  margin-top: 0;
+  background: transparent;
+}
+
+.ant-modal .ant-modal-footer .ant-btn {
+  height: 34px;
+  padding-inline: 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.ant-modal .ant-modal-footer .ant-btn:first-child:not(:last-child) {
+  margin-left: 0;
+}
+
+/* 表单在弹窗内:标签与控件对齐节奏与 FormRow 一致 */
+.ant-modal .ant-form-item {
+  margin-bottom: 14px;
+}
+
+.ant-modal .ant-form-item-label > label {
+  color: var(--cf-muted);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.ant-modal .ant-form-item .ant-input,
+.ant-modal .ant-form-item .ant-input-affix-wrapper,
+.ant-modal .ant-form-item .ant-select,
+.ant-modal .ant-form-item .ant-input-number {
+  border-radius: 8px;
+}
+
+/* 确认弹窗(Popconfirm / Modal.confirm):紧凑、语义色头部 */
+.ant-modal-confirm .ant-modal-content {
+  padding: 20px;
+  background: var(--cf-raised);
+  border: 1px solid var(--cf-border);
+  border-radius: 10px;
+}
+
+.ant-modal-confirm .ant-modal-confirm-title {
+  font-size: 15px;
+  font-weight: 720;
+  color: var(--cf-text);
+}
+
+.ant-modal-confirm .ant-modal-confirm-body {
+  font-size: 13px;
+  color: var(--cf-muted);
+  margin-top: 8px;
+}
+
+/* 抽屉(Drawer)与弹窗同一语言:墨色面板 + 分隔线 */
+.ant-drawer .ant-drawer-content {
+  background: var(--cf-raised);
+  border-left: 1px solid var(--cf-border);
+}
+
+.ant-drawer .ant-drawer-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--cf-border);
+  background: transparent;
+}
+
+.ant-drawer .ant-drawer-title {
+  font-size: 16px;
+  font-weight: 720;
+  color: var(--cf-text);
+}
+
+.ant-drawer .ant-drawer-body {
+  padding: 16px 20px;
+}
+
+.ant-drawer .ant-drawer-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--cf-border);
+}
+
+.ant-drawer .ant-drawer-footer .ant-btn {
+  height: 34px;
+  border-radius: 8px;
+  font-weight: 600;
+}

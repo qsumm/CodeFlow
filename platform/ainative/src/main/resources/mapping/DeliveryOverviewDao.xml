@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ainative.insights.DeliveryOverviewDao">
+    <!--
+      看板统一分类（工单 #55395）跨命名空间复用 WorkitemDao.kanbanCategoryExpr，保证「待处理」
+      与列表/看板分类不漂移。该片段内部还以相对 refid 引用 dispatchActive/dispatchStarted/pendingHumanRequest，
+      按 MyBatis 语义会解析到本命名空间，故此处提供同名转发片段（与 MemberDeliveryDao 同一模式）。
+    -->
+    <sql id="dispatchActive"><include refid="com.ainative.workitem.WorkitemDao.dispatchActive"/></sql>
+    <sql id="dispatchStarted"><include refid="com.ainative.workitem.WorkitemDao.dispatchStarted"/></sql>
+    <sql id="pendingHumanRequest"><include refid="com.ainative.workitem.WorkitemDao.pendingHumanRequest"/></sql>
+    <sql id="kanbanCategory"><include refid="com.ainative.workitem.WorkitemDao.kanbanCategoryExpr"/></sql>
+
+    <!-- 区间内新建工单口径（趋势统计与明细列表共用）：[start, end) 半开区间，租户隔离，排除已删除。 -->
+    <sql id="createdScope">
+        w.tenant_id = #{tenantId}
+        AND w.is_deleted = 0
+        AND w.gmt_create &gt;= #{start}
+        AND w.gmt_create &lt; #{end}
+    </sql>
+
+    <select id="listCreatedWorkitems" resultType="com.ainative.insights.DeliveryOverviewService$CreatedWorkitem">
+        SELECT w.id AS id,
+               w.gmt_create AS createdAt
+        FROM workitem w
+        WHERE <include refid="createdScope"/>
+        ORDER BY w.gmt_create, w.id
+    </select>
+
+    <select id="countCreatedWorkitems" resultType="long">
+        SELECT COUNT(*)
+        FROM workitem w
+        WHERE <include refid="createdScope"/>
+    </select>
+
+    <!--
+      新建工单明细列表：与统计卡同口径（含取消工单的新建），创建时间降序（最新在前）；
+      状态名与节点分类取自当前 status_node，供列表状态展示与着色。
+    -->
+    <select id="listCreatedWorkitemsPage"
+            resultType="com.ainative.insights.DeliveryOverviewService$CreatedWorkitemRow">
+        SELECT w.id AS id,
+               w.title AS title,
+               sn.name AS statusName,
+               sn.category AS statusCategory,
+               w.priority AS priority,
+               w.gmt_create AS createdAt
+        FROM workitem w
+        LEFT JOIN status_node sn ON sn.id = w.status_node_id AND sn.tenant_id = w.tenant_id
+        WHERE <include refid="createdScope"/>
+        ORDER BY w.gmt_create DESC, w.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!--
+      交付完成口径与 RequirementDeliveryDao.listDeliveredRequirements 完全一致（工单 #55697）：
+      当前状态节点 category='DONE'，完成时间取最近一次进入 DONE 类节点的 STATUS_CHANGE 事件；
+      无事件记录不计入（不从当前状态反推），取消不计，按 workitem 去重。全部工单类型计入吞吐。
+      模板条件必须留在子查询 WHERE：MySQL 8 不允许 JOIN ... ON 引用外层查询列
+      （Unknown column 'w.template_id' in 'on clause'），H2 MySQL 模式会错误放行。
+    -->
+    <select id="countDeliveredWorkitems" resultType="long">
+        SELECT COUNT(*)
+        FROM (
+            SELECT w.id AS id,
+                   (SELECT MAX(e.gmt_create)
+                    FROM workitem_event e
+                    JOIN status_node done_node
+                      ON done_node.tenant_id = e.tenant_id
+                     AND done_node.code = e.to_val
+                     AND done_node.category = 'DONE'
+                    WHERE e.tenant_id = w.tenant_id
+                      AND e.workitem_id = w.id
+                      AND e.event_type = 'STATUS_CHANGE'
+                      AND done_node.template_id = w.template_id) AS delivered_at
+            FROM workitem w
+            JOIN status_node sn ON sn.id = w.status_node_id AND sn.tenant_id = w.tenant_id
+            WHERE w.tenant_id = #{tenantId}
+              AND w.is_deleted = 0
+              AND sn.category = 'DONE'
+        ) delivered
+        WHERE delivered.delivered_at &gt;= #{start} AND delivered.delivered_at &lt; #{end}
+    </select>
+
+    <!--
+      待处理 = 当前处理人为本人的工单且统一分类未结束（不含 DONE / CANCELED）；
+      排序：待决策优先，再按优先级升序（0=紧急 最高）、最近更新时间降序。
+    -->
+    <sql id="pendingScope">
+        w.tenant_id = #{tenantId}
+        AND w.is_deleted = 0
+        AND w.assignee_type = 'HUMAN'
+        AND w.assignee_ref = #{currentUserId}
+        AND <include refid="kanbanCategory"/> IN ('NEW', 'IN_PROGRESS', 'PENDING_DECISION')
+    </sql>
+
+    <select id="countPendingWorkitems" resultType="long">
+        SELECT COUNT(*)
+        FROM workitem w
+        WHERE <include refid="pendingScope"/>
+    </select>
+
+    <select id="listPendingWorkitems" resultType="com.ainative.insights.DeliveryOverviewService$PendingWorkitemRow">
+        SELECT w.id AS id,
+               w.title AS title,
+               sn.name AS statusName,
+               <include refid="kanbanCategory"/> AS statusCategory,
+               w.priority AS priority,
+               w.gmt_modified AS gmtModified
+        FROM workitem w
+        LEFT JOIN status_node sn ON sn.id = w.status_node_id AND sn.tenant_id = w.tenant_id
+        WHERE <include refid="pendingScope"/>
+        ORDER BY CASE <include refid="kanbanCategory"/> WHEN 'PENDING_DECISION' THEN 0 ELSE 1 END,
+                 w.priority ASC,
+                 w.gmt_modified DESC,
+                 w.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!--
+      ══ 交付效能扩展指标(工单派发质量口径) ══
+      派发口径与 DashboardDao.pipeline* 一致:正式交付围栏(排除评论交互/侧聊等非交付派发),
+      返工判定与 DashboardDao.reworkDispatchCondition 同式(评论返工行,或三段式幂等键 + attempt>=2)。
+      两片段在此自包含复制(而非跨命名空间 include),使 DaoTest 无需加载 DashboardDao。
+    -->
+    <sql id="formalDeliveryFence" databaseId="ainative-source-aware">
+        AND d.source_type = 'WORKITEM'
+        AND COALESCE(d.resume_mode, '') NOT IN ('COMMENT_INTERACTION', 'SIDE_INTERACTION', 'CANONICAL_INTERACTION')
+    </sql>
+    <sql id="formalDeliveryFence" databaseId="ainative-legacy">
+        AND COALESCE(d.resume_mode, '') NOT IN ('COMMENT_INTERACTION', 'SIDE_INTERACTION', 'CANONICAL_INTERACTION')
+    </sql>
+    <sql id="reworkDispatchCondition">
+        (
+            d.resume_mode = 'COMMENT_REWORK'
+            OR (
+                d.resume_mode IS NULL
+                AND d.attempt &gt;= 2
+                AND (
+                    d.idempotency_key REGEXP '^[0-9]+:[0-9]+:[0-9]+$'
+                    OR d.idempotency_key REGEXP '^WORKITEM:[0-9]+:[0-9]+:[0-9]+$'
+                )
+            )
+        )
+    </sql>
+
+    <!-- 区间内正式交付派发:占比分母与质量指标共用。 -->
+    <sql id="dispatchScope">
+        d.tenant_id = #{tenantId}
+        AND d.is_deleted = 0
+        <include refid="formalDeliveryFence"/>
+        AND d.gmt_create &gt;= #{start}
+        AND d.gmt_create &lt; #{end}
+    </sql>
+
+    <!-- 平均交付周期(秒):区间内完成工单 创建→最近一次进入 DONE 事件 的平均时长;区间内无完成返回 NULL。 -->
+    <select id="avgLeadTimeSeconds" resultType="java.lang.Double">
+        SELECT AVG(TIMESTAMPDIFF(SECOND, delivered.gmt_create, delivered.delivered_at))
+        FROM (
+            SELECT w.id AS id,
+                   w.gmt_create AS gmt_create,
+                   (SELECT MAX(e.gmt_create)
+                    FROM workitem_event e
+                    JOIN status_node done_node
+                      ON done_node.tenant_id = e.tenant_id
+                     AND done_node.code = e.to_val
+                     AND done_node.category = 'DONE'
+                    WHERE e.tenant_id = w.tenant_id
+                      AND e.workitem_id = w.id
+                      AND e.event_type = 'STATUS_CHANGE'
+                      AND done_node.template_id = w.template_id) AS delivered_at
+            FROM workitem w
+            JOIN status_node sn ON sn.id = w.status_node_id AND sn.tenant_id = w.tenant_id
+            WHERE w.tenant_id = #{tenantId}
+              AND w.is_deleted = 0
+              AND sn.category = 'DONE'
+        ) delivered
+        WHERE delivered.delivered_at &gt;= #{start} AND delivered.delivered_at &lt; #{end}
+    </select>
+
+    <!-- 进行中工单:当前时点快照(统一看板分类未结束),历史不可回溯故不做环比。 -->
+    <select id="countWorkitemsInProgress" resultType="long">
+        SELECT COUNT(*)
+        FROM workitem w
+        WHERE w.tenant_id = #{tenantId}
+          AND w.is_deleted = 0
+          AND <include refid="kanbanCategory"/> IN ('NEW', 'IN_PROGRESS', 'PENDING_DECISION')
+    </select>
+
+    <select id="countTotalDispatches" resultType="long">
+        SELECT COUNT(*) FROM dispatch d WHERE <include refid="dispatchScope"/>
+    </select>
+
+    <select id="countSucceededDispatches" resultType="long">
+        SELECT COUNT(*) FROM dispatch d WHERE <include refid="dispatchScope"/> AND d.status = 'SUCCEEDED'
+    </select>
+
+    <!-- 一次通过分子:SUCCEEDED 且 attempt=0(与 InsightsDao.countFirstPassDispatches 同式,区间参数化)。 -->
+    <select id="countFirstPassDispatches" resultType="long">
+        SELECT COUNT(*) FROM dispatch d
+        WHERE <include refid="dispatchScope"/> AND d.status = 'SUCCEEDED' AND d.attempt = 0
+    </select>
+
+    <select id="countFailedDispatches" resultType="long">
+        SELECT COUNT(*) FROM dispatch d
+        WHERE <include refid="dispatchScope"/> AND d.status IN ('FAILED', 'TIMEOUT')
+    </select>
+
+    <select id="countReworkDispatches" resultType="long">
+        SELECT COUNT(*) FROM dispatch d
+        WHERE <include refid="dispatchScope"/>
+          AND <include refid="reworkDispatchCondition"/>
+    </select>
+
+    <!-- Token 消耗:派发级用量明细,区间合计与逐日分桶(Java 侧 Asia/Shanghai 归日)。 -->
+    <select id="sumTokens" resultType="long">
+        SELECT COALESCE(SUM(u.total_tokens), 0)
+        FROM dispatch_ai_usage u
+        WHERE u.tenant_id = #{tenantId}
+          AND u.usage_at &gt;= #{start}
+          AND u.usage_at &lt; #{end}
+    </select>
+
+    <select id="listTokenUsageRows" resultType="com.ainative.insights.DeliveryOverviewService$TokenUsageRow">
+        SELECT u.usage_at AS usageAt,
+               u.total_tokens AS totalTokens
+        FROM dispatch_ai_usage u
+        WHERE u.tenant_id = #{tenantId}
+          AND u.usage_at &gt;= #{start}
+          AND u.usage_at &lt; #{end}
+    </select>
+
+    <!--
+      失败原因 TOP:结构化归因优先(dispatch_result_decision.failure_category,同一 dispatch 取
+      最近一次 decision,避免一 dispatch 多 decision 放大计数),回退 error 前 60 字,皆无则
+      reason 为 NULL 由服务层归一为 UNKNOWN(界面文案走 i18n,不在 SQL 里写死中文)。
+    -->
+    <select id="listFailureReasons" resultType="com.ainative.insights.DeliveryOverviewService$FailureReasonRow">
+        SELECT COALESCE(NULLIF(derd.failure_category, ''), NULLIF(SUBSTRING(d.error, 1, 60), '')) AS reason,
+               COUNT(*) AS cnt,
+               MAX(d.gmt_modified) AS lastTime
+        FROM dispatch d
+        LEFT JOIN (
+            SELECT r.tenant_id, r.dispatch_id, r.failure_category
+            FROM dispatch_result_decision r
+            JOIN (SELECT tenant_id, dispatch_id, MAX(decided_at) AS decided_at
+                  FROM dispatch_result_decision
+                  GROUP BY tenant_id, dispatch_id) latest
+              ON latest.tenant_id = r.tenant_id
+             AND latest.dispatch_id = r.dispatch_id
+             AND latest.decided_at = r.decided_at
+        ) derd ON derd.tenant_id = d.tenant_id AND derd.dispatch_id = d.id
+        WHERE <include refid="dispatchScope"/>
+          AND d.status IN ('FAILED', 'TIMEOUT')
+        GROUP BY COALESCE(NULLIF(derd.failure_category, ''), NULLIF(SUBSTRING(d.error, 1, 60), ''))
+        ORDER BY cnt DESC, lastTime DESC
+        LIMIT 5
+    </select>
+</mapper>

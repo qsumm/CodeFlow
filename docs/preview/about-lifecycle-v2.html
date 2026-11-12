@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>关于平台 · 生命周期 V2 预览</title>
+<style>body { margin:0; background:#0b1018; display:flex; flex-direction:column; align-items:center; padding:34px 0 60px; font-family:-apple-system,'PingFang SC',sans-serif; }</style>
+</head><body>
+<div id="afin" style="padding:6px 0 24px;">
+<style>
+#afin * { box-sizing:border-box; }
+#afin { font-family:-apple-system,'PingFang SC',sans-serif; }
+#afin .demo { position:relative; width:1200px; max-width:100%; height:520px; margin:0 auto;
+  border-radius:18px; overflow:hidden;
+  background:radial-gradient(1000px 520px at 50% -80px, rgba(61,139,253,.16), transparent 70%),
+             radial-gradient(700px 400px at 85% 110%, rgba(46,230,168,.06), transparent 70%),
+             linear-gradient(180deg,#0b1424,#0d1826);
+  border:1px solid rgba(124,192,255,.14);
+  box-shadow:0 30px 80px rgba(0,0,0,.5); }
+#afin .stars { position:absolute; inset:0; }
+#afin .stars i { position:absolute; width:2px; height:2px; border-radius:50%; background:rgba(200,220,255,.5); }
+#afin .head { position:absolute; top:34px; left:0; right:0; text-align:center; z-index:5; }
+#afin .head .tt { font-size:12px; letter-spacing:8px; color:rgba(238,244,251,.4); }
+#afin .head h2 { margin:10px 0 0; font-size:27px; font-weight:700; color:#eef4fb; letter-spacing:1px; }
+#afin .head .vt { display:inline-flex; margin-top:12px; padding:4px 16px; border-radius:99px; border:1px solid rgba(124,192,255,.32); font-size:12px; color:#8cbdf5; letter-spacing:1px; }
+#afin svg.route { position:absolute; inset:0; width:1200px; height:520px; }
+#afin svg.route .base { fill:none; stroke:rgba(124,192,255,.13); stroke-width:2; }
+#afin svg.route .draw { fill:none; stroke:url(#afg); stroke-width:2.5; stroke-linecap:round; }
+#afin .orb { position:absolute; width:20px; height:20px; margin:-10px; border-radius:50%; z-index:6;
+  background:radial-gradient(circle at 35% 30%, #d8e8ff, #3d8bfd 62%, #1b5fb8);
+  box-shadow:0 0 16px rgba(61,139,253,.95), 0 0 42px rgba(61,139,253,.4); }
+#afin .wi { position:absolute; z-index:7; width:236px; margin:-136px 0 0 -118px;
+  border-radius:14px; background:rgba(10,18,30,.94); border:1px solid rgba(124,192,255,.3);
+  box-shadow:0 16px 48px rgba(0,0,0,.6), 0 0 28px rgba(61,139,253,.16);
+  padding:14px 17px 15px; backdrop-filter:blur(8px); }
+#afin .wi .tag { font-size:9.5px; letter-spacing:2px; color:rgba(140,189,245,.65); margin-bottom:6px; }
+#afin .wi .t { font-size:12px; font-weight:600; color:#eef4fb; line-height:1.5; }
+#afin .wi .desc { font-size:11px; color:rgba(238,244,251,.6); line-height:1.6; margin-top:8px; min-height:17px; }
+#afin .wi .meta { display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
+#afin .wi .st { font-size:10px; font-weight:600; padding:2px 10px; border-radius:99px; background:rgba(124,192,255,.14); color:#8cbdf5; }
+#afin .wi .st.done { background:rgba(46,230,168,.14); color:#2ee6a8; }
+#afin .wi .st.ops { background:rgba(140,189,245,.14); color:#8cbdf5; }
+#afin .wi .pg { font-family:Menlo,monospace; font-size:9.5px; color:rgba(238,244,251,.45); }
+#afin .st { position:absolute; z-index:4; transform:translate(-50%,-50%); text-align:center; width:120px; }
+#afin .st .c { width:52px; height:52px; margin:0 auto; border-radius:50%; background:rgba(13,24,38,.9);
+  border:1.5px solid rgba(124,192,255,.26); display:grid; place-items:center; transition:all .5s; }
+#afin .st .c svg { width:20px; height:20px; color:rgba(140,189,245,.65); transition:color .5s; }
+#afin .st .nm { margin-top:9px; font-size:13.5px; font-weight:600; color:rgba(238,244,251,.5); transition:color .5s; white-space:nowrap; }
+#afin .st .no { font-family:Menlo,monospace; font-size:9.5px; color:rgba(140,189,245,.4); margin-top:3px; letter-spacing:1px; transition:color .5s; }
+#afin .st.done .c { border-color:rgba(46,230,168,.5); box-shadow:0 0 20px rgba(46,230,168,.25); background:rgba(15,32,53,.95); }
+#afin .st.done .c svg { color:#2ee6a8; }
+#afin .st.done .nm { color:#eef4fb; }
+#afin .st.done .no { color:rgba(46,230,168,.75); }
+#afin .st.cur .c { border-color:#8cbdf5; box-shadow:0 0 26px rgba(61,139,253,.5); background:#12233c; transform:scale(1.15); }
+#afin .st.cur .c svg { color:#cfe4ff; }
+#afin .st.cur .nm { color:#eef4fb; }
+#afin .foot { position:absolute; bottom:26px; left:0; right:0; display:flex; justify-content:center; gap:26px; z-index:5; }
+#afin .foot .it { display:inline-flex; align-items:center; gap:9px; font-size:12.5px; color:rgba(238,244,251,.55); }
+#afin .foot .vv { font-family:Menlo,monospace; color:#8cbdf5; font-weight:700; }
+#afin .foot svg { width:14px; height:14px; color:#8cbdf5; }
+@media (prefers-reduced-motion: reduce) { #afin .orb, #afin .st .c, #afin .st .nm { transition:none !important; } }
+</style>
+<svg width="0" height="0" style="position:absolute"><defs>
+<linearGradient id="afg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#1b5fb8"/><stop offset=".5" stop-color="#3d8bfd"/><stop offset="1" stop-color="#2ee6a8"/></linearGradient>
+</defs></svg>
+<div class="demo" id="afin-demo">
+  <div class="stars" id="afin-stars"></div>
+  <div class="head"><div class="tt">软件产品自动交付平台</div><h2>一个工单的旅程</h2><span class="vt">从需求澄清到交付运维 · 持续迭代 · 闭环交付</span></div>
+  <svg class="route" viewBox="0 0 1200 520">
+    <path class="base" id="afin-base" d=""/>
+    <path class="draw" id="afin-draw" d="" pathLength="1000"/>
+  </svg>
+  <div class="orb" id="afin-orb"></div>
+  <div class="wi" id="afin-wi">
+    <div class="tag">工作项 · 进行中</div>
+    <div class="t">会员登录页支持回车键提交登录表单</div>
+    <div class="desc" id="afin-wi-desc">AI 澄清对话，对齐验收标准</div>
+    <div class="meta"><span class="st" id="afin-wi-st">澄清中</span><span class="pg" id="afin-wi-pg">1 / 9</span></div>
+  </div>
+  <div id="afin-nd"></div>
+  <div class="foot">
+    <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>交付完成自动回流需求</div>
+    <div class="it">当前平台版本 <span class="vv">v1.1.0</span></div>
+    <div class="it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>全程留痕 · 产物归档</div>
+  </div>
+</div>
+<script>
+(function(){
+  const root = document.getElementById('afin');
+  const demo = root.querySelector('#afin-demo');
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const STEPS = [
+    {nm:'需求澄清', ic:'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z', desc:'AI 澄清对话，对齐验收标准'},
+    {nm:'启动',     ic:'m6 3 14 9-14 9V3z', desc:'一键选择小队并启动交付'},
+    {nm:'开发',     ic:'m16 18 6-6-6-6M8 6l-6 6 6 6', desc:'运行器驱动代码自动编写'},
+    {nm:'验证',     ic:'M12 22s8-4 8-10V5l-8-3-8 3v6c0 5 3 9 8 10z', desc:'完成门自动校验交付产出'},
+    {nm:'评审',     ic:'M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z', desc:'版本提交人工或自动评审'},
+    {nm:'部署',     ic:'m22 2-7 20-4-9-9-4Z M22 2 11 13', desc:'构建产物部署到目标环境'},
+    {nm:'测试',     ic:'M6 3h12 M10 3v6.5L4.5 19a2 2 0 0 0 1.8 3h13.4a2 2 0 0 0 1.8-3L16 9.5V3', desc:'自动化测试与回归验证'},
+    {nm:'交付',     ic:'M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z', desc:'交付报告与产物归档'},
+    {nm:'运维',     ic:'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z', desc:'持续监控与迭代优化'},
+  ];
+  const STATES = ['澄清中','已启动','开发中','验证中','评审中','部署中','测试中','已交付','持续运营'];
+  /* 九站沿闭环均匀分布(顶部起顺时针) */
+  const CX = 600, CY = 270, RX = 460, RY = 175;
+  const P = STEPS.map((s, i) => {
+    const a = (-90 + i * 40) * Math.PI / 180;
+    return { nm: s.nm, ic: s.ic, desc: s.desc, x: CX + RX * Math.cos(a), y: CY + RY * Math.sin(a) };
+  });
+  /* 闭合平滑路径(Catmull-Rom → Bezier) */
+  function loopPath(pts) {
+    const n = pts.length;
+    const pt = (i) => pts[(i + n) % n];
+    let d = `M ${pt(0).x} ${pt(0).y}`;
+    for (let i = 0; i < n; i++) {
+      const p0 = pt(i-1), p1 = pt(i), p2 = pt(i+1), p3 = pt(i+2);
+      d += ` C ${p1.x + (p2.x - p0.x)/6} ${p1.y + (p2.y - p0.y)/6}, ${p2.x - (p3.x - p1.x)/6} ${p2.y - (p3.y - p1.y)/6}, ${p2.x} ${p2.y}`;
+    }
+    return d + ' Z';
+  }
+  const D = loopPath(P);
+  root.querySelector('#afin-base').setAttribute('d', D);
+  root.querySelector('#afin-draw').setAttribute('d', D);
+  const svgIcon = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><path d="${d}"/></svg>`;
+  /* 星空 */
+  const stars = root.querySelector('#afin-stars');
+  let sh = '';
+  for (let i = 0; i < 52; i++) {
+    sh += `<i style="left:${(Math.random()*98).toFixed(1)}%;top:${(Math.random()*92).toFixed(1)}%;opacity:${(0.2+Math.random()*0.5).toFixed(2)}"></i>`;
+  }
+  stars.innerHTML = sh;
+  /* 九站节点:圆形图标 + 中文名 */
+  const ndBox = root.querySelector('#afin-nd');
+  ndBox.innerHTML = P.map((p, i) =>
+    `<div class="st" data-i="${i}" style="left:${p.x}px;top:${p.y}px"><div class="c">${svgIcon(p.ic)}</div><div class="nm">${p.nm}</div><div class="no">0${i+1}</div></div>`
+  ).join('');
+  const pathEl = root.querySelector('#afin-draw');
+  const L = pathEl.getTotalLength();
+  const orb = root.querySelector('#afin-orb');
+  const wi = root.querySelector('#afin-wi');
+  const wiSt = root.querySelector('#afin-wi-st');
+  const wiDesc = root.querySelector('#afin-wi-desc');
+  const wiPg = root.querySelector('#afin-wi-pg');
+  const nds = [...ndBox.children];
+  /* 每站在路径上的弧长位置(由站点坐标反查最近弧长) */
+  const stationLen = P.map((p) => {
+    let best = 0, bd = 1e9;
+    for (let l = 0; l <= L; l += 4) {
+      const q = pathEl.getPointAtLength(l);
+      const d2 = (q.x - p.x) ** 2 + (q.y - p.y) ** 2;
+      if (d2 < bd) { bd = d2; best = l; }
+    }
+    return best;
+  });
+  const CYCLE = reduced ? 1 : 15000;
+  const start = performance.now();
+  function frame(now) {
+    const t = ((now - start) % CYCLE) / CYCLE;
+    const dist = t * L;
+    const q = pathEl.getPointAtLength(dist);
+    orb.style.transform = `translate(${q.x}px, ${q.y}px)`;
+    wi.style.transform = `translate(${q.x}px, ${q.y}px)`;
+    let cur = 0;
+    for (let i = 0; i < stationLen.length; i++) {
+      const s = stationLen[i];
+      const passed = ((dist - s) % L + L) % L;
+      if (passed < L * 0.5) cur = i;
+    }
+    nds.forEach((n, i) => {
+      const passed = ((stationLen[i] - dist) % L + L) % L > L * 0.5;
+      n.className = 'st' + (passed ? ' done' : '') + (i === cur ? ' cur' : '');
+    });
+    wiSt.textContent = STATES[cur];
+    wiSt.className = 'st' + (cur === 7 ? ' done' : cur === 8 ? ' ops' : '');
+    wiDesc.textContent = P[cur].desc;
+    wiPg.textContent = `${cur + 1} / 9`;
+    requestAnimationFrame(frame);
+  }
+  if (reduced) {
+    nds.forEach((n) => { n.className = 'st done'; });
+    const t0 = pathEl.getPointAtLength(0);
+    orb.style.transform = `translate(${t0.x}px, ${t0.y}px)`;
+    wi.style.transform = `translate(${t0.x}px, ${t0.y}px)`;
+    wiSt.textContent = '澄清中';
+    return;
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</div>

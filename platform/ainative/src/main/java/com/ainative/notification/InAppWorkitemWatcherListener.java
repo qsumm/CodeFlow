@@ -1,0 +1,270 @@
+package com.ainative.notification;
+
+import com.ainative.agent.AgentDO;
+import com.ainative.agent.AgentDao;
+import com.ainative.dispatch.WorkitemAssignedEvent;
+import com.ainative.im.notification.WorkitemHumanAssignedEvent;
+import com.ainative.integration.event.WorkitemCommentCreatedEvent;
+import com.ainative.integration.event.WorkitemStatusChangedEvent;
+import com.ainative.statemachine.StatusNodeDO;
+import com.ainative.statemachine.StatusNodeDao;
+import com.ainative.user.UserAccountStates;
+import com.ainative.user.UserDO;
+import com.ainative.user.UserDao;
+import com.ainative.workitem.WorkitemCommentMentionDO;
+import com.ainative.workitem.WorkitemCommentMentionDao;
+import com.ainative.workitem.WorkitemDO;
+import com.ainative.workitem.WorkitemDao;
+import com.ainative.workitem.WorkitemWatcherService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.Locale;
+import java.util.function.Function;
+import com.ainative.common.i18n.SystemMessages;
+
+/**
+ * 关注人（watcher）站内通知。关注只是新增的一类收件来源，不改变负责人/@/钉钉的既有通知规则。
+ *
+ * <p>去重口径：收件人 = 有效关注人 − 本次事件的操作者（仅真人）− 本次事件已有的专属收件人
+ * （评论的 @ 对象、真人指派的新负责人）。因此同时是负责人 + 被 @ + 关注人的用户，
+ * 每个事件只会收到一条有效通知。
+ */
+@Component
+public class InAppWorkitemWatcherListener {
+
+    private static final Logger log = LoggerFactory.getLogger(InAppWorkitemWatcherListener.class);
+    private static final int MAX_CONTENT_LENGTH = 100;
+
+    static final String TYPE_COMMENT = "WATCHED_COMMENT";
+    static final String TYPE_ASSIGNED = "WATCHED_ASSIGNED";
+    static final String TYPE_STATUS_CHANGED = "WATCHED_STATUS_CHANGED";
+    static final String TYPE_COMPLETED = "WATCHED_COMPLETED";
+
+    private final NotifyService notifyService;
+    private final WorkitemWatcherService watcherService;
+    private final WorkitemDao workitemDao;
+    private final UserDao userDao;
+    private final AgentDao agentDao;
+    private final StatusNodeDao statusNodeDao;
+    private final WorkitemCommentMentionDao commentMentionDao;
+
+    public InAppWorkitemWatcherListener(NotifyService notifyService, WorkitemWatcherService watcherService,
+            WorkitemDao workitemDao, UserDao userDao, AgentDao agentDao, StatusNodeDao statusNodeDao,
+            WorkitemCommentMentionDao commentMentionDao) {
+        this.notifyService = notifyService;
+        this.watcherService = watcherService;
+        this.workitemDao = workitemDao;
+        this.userDao = userDao;
+        this.agentDao = agentDao;
+        this.statusNodeDao = statusNodeDao;
+        this.commentMentionDao = commentMentionDao;
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = false)
+    public void onCommentCreated(WorkitemCommentCreatedEvent event) {
+        try {
+            WorkitemDO workitem = findWorkitem(event.tenantId(), event.workitemId());
+            if (workitem == null) {
+                return;
+            }
+            Set<Long> excluded = new HashSet<>();
+            if (isHuman(event.actorType())) {
+                excluded.add(event.actorRef());
+            }
+            excluded.addAll(mentionedHumanIds(event.tenantId(), event.workitemId(), event.commentId()));
+            String actor = actorName(event.actorType(), event.actorRef());
+            String summary = InAppCommentMentionedListener.truncate(event.contentMd(), MAX_CONTENT_LENGTH);
+            String workitemTitle = workitem.getTitle();
+            notifyWatchers(event.tenantId(), event.workitemId(), TYPE_COMMENT, "你关注的工作项有新评论",
+                    actor + " 在「" + workitemTitle + "」发表了新评论："
+                            + summary,
+                    excluded, "notification.watcher.comment", new Object[]{actor, workitemTitle, summary}, null);
+        } catch (Exception e) {
+            log.error("failed to send watcher notification for comment tenantId={} workitemId={} commentId={}",
+                    event.tenantId(), event.workitemId(), event.commentId(), e);
+        }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = false)
+    public void onHumanAssigned(WorkitemHumanAssignedEvent event) {
+        try {
+            Set<Long> excluded = new HashSet<>();
+            excluded.add(event.recipientUserId());
+            if (isHuman(event.actorType())) {
+                excluded.add(event.actorRef());
+            }
+            String assignee = humanName(event.recipientUserId());
+            notifyWatchers(event.tenantId(), event.workitemId(), TYPE_ASSIGNED, "你关注的工作项变更了负责人",
+                    event.actorDisplayName() + " 将「" + event.workitemTitle() + "」指派给了 "
+                            + assignee,
+                    excluded, "notification.watcher.human_assigned",
+                    new Object[]{event.actorDisplayName(), event.workitemTitle(), assignee},
+                    event.actorNameKind() == null ? null : locale -> new Object[]{com.ainative.workitem.AssignmentActor.recipientDisplayName(
+                            event.actorDisplayName(), event.actorNameKind(), locale), event.workitemTitle(), assignee});
+        } catch (Exception e) {
+            log.error("failed to send watcher notification for human assignment tenantId={} workitemId={}",
+                    event.tenantId(), event.workitemId(), e);
+        }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = false)
+    public void onAgentAssigned(WorkitemAssignedEvent event) {
+        try {
+            WorkitemDO workitem = findWorkitem(event.getTenantId(), event.getWorkitemId());
+            if (workitem == null) {
+                return;
+            }
+            Set<Long> excluded = new HashSet<>();
+            excluded.add(event.getUserId());
+            String agent = agentName(event.getAgentId());
+            boolean missingAgentId = event.getAgentId() == null;
+            String workitemTitle = workitem.getTitle();
+            notifyWatchers(event.getTenantId(), event.getWorkitemId(), TYPE_ASSIGNED, "你关注的工作项变更了负责人",
+                    "「" + workitemTitle + "」已指派给 AI 成员 " + agent,
+                    excluded, "notification.watcher.agent_assigned", new Object[]{workitemTitle, agent},
+                    missingAgentId ? locale -> new Object[]{workitemTitle,
+                            SystemMessages.render("notification.agent_fallback", null, agent, locale)} : null);
+        } catch (Exception e) {
+            log.error("failed to send watcher notification for agent assignment tenantId={} workitemId={}",
+                    event.getTenantId(), event.getWorkitemId(), e);
+        }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = false)
+    public void onStatusChanged(WorkitemStatusChangedEvent event) {
+        try {
+            WorkitemDO workitem = findWorkitem(event.tenantId(), event.workitemId());
+            if (workitem == null) {
+                return;
+            }
+            StatusNodeDO node = statusNodeDao.findById(event.toNodeId());
+            boolean completed = isCompleted(node);
+            Set<Long> excluded = new HashSet<>();
+            if (event.isHumanActor()) {
+                excluded.add(event.userId());
+            }
+            String status = statusName(node);
+            boolean missingStatus = node == null || ((node.getName() == null || node.getName().isBlank()) && node.getCode() == null);
+            String workitemTitle = workitem.getTitle();
+            notifyWatchers(event.tenantId(), event.workitemId(),
+                    completed ? TYPE_COMPLETED : TYPE_STATUS_CHANGED,
+                    completed ? "你关注的工作项已完成/关闭" : "你关注的工作项状态有更新",
+                    "「" + workitemTitle + "」状态变更为 " + status,
+                    excluded, "notification.watcher.status", new Object[]{workitemTitle, status},
+                    missingStatus ? locale -> new Object[]{workitemTitle,
+                            SystemMessages.render("notification.status_fallback", null, status, locale)} : null);
+        } catch (Exception e) {
+            log.error("failed to send watcher notification for status change tenantId={} workitemId={} toNodeId={}",
+                    event.tenantId(), event.workitemId(), event.toNodeId(), e);
+        }
+    }
+
+    private void notifyWatchers(long tenantId, long workitemId, String type, String title, String content,
+            Set<Long> excludedRecipients, String contentKey, Object[] contentArgs, Function<Locale, Object[]> contentArgsResolver) {
+        List<Long> recipients = new ArrayList<>();
+        for (Long userId : watcherService.watcherUserIds(tenantId, workitemId)) {
+            if (userId != null && !excludedRecipients.contains(userId)) {
+                recipients.add(userId);
+            }
+        }
+        if (recipients.isEmpty()) {
+            return;
+        }
+        NotifyEvent notifyEvent = new NotifyEvent();
+        notifyEvent.setTenantId(tenantId);
+        notifyEvent.setType(type);
+        notifyEvent.setTitle(title);
+        notifyEvent.setContent(content);
+        notifyEvent.setTitleKey("notification.watcher.title." + type.toLowerCase(Locale.ROOT));
+        notifyEvent.setContentKey(contentKey);
+        notifyEvent.setContentArgs(contentArgs);
+        notifyEvent.setContentArgsResolver(contentArgsResolver);
+        notifyEvent.setLink("/workitems/" + workitemId);
+        notifyEvent.setRefType("WORKITEM");
+        notifyEvent.setRefId(workitemId);
+        notifyEvent.setRecipientIds(recipients);
+        notifyService.notify(notifyEvent);
+        log.info("in-app watcher notification sent type={} tenantId={} workitemId={} recipients={}",
+                type, tenantId, workitemId, recipients.size());
+    }
+
+    /** 失去工作空间访问权的关注人由 watcherService 过滤，这里只负责按工单租户校验可见性。 */
+    private WorkitemDO findWorkitem(long tenantId, long workitemId) {
+        WorkitemDO workitem = workitemDao.findById(workitemId);
+        if (workitem == null || workitem.getTenantId() == null || workitem.getTenantId() != tenantId) {
+            return null;
+        }
+        return workitem;
+    }
+
+    private Set<Long> mentionedHumanIds(long tenantId, long workitemId, long commentId) {
+        Set<Long> ids = new HashSet<>();
+        List<WorkitemCommentMentionDO> mentions = commentMentionDao.listByWorkitem(tenantId, workitemId);
+        for (WorkitemCommentMentionDO mention : mentions == null ? Collections.<WorkitemCommentMentionDO>emptyList()
+                : mentions) {
+            if (mention == null || mention.getCommentId() == null || mention.getCommentId() != commentId) {
+                continue;
+            }
+            if ("HUMAN".equals(mention.getTargetType()) && mention.getTargetRef() != null) {
+                ids.add(mention.getTargetRef());
+            }
+        }
+        return ids;
+    }
+
+    private static boolean isHuman(String actorType) {
+        return "HUMAN".equals(actorType);
+    }
+
+    /** 状态分类为 DONE(完成/发布)或 CANCELED(关闭/取消)视为终态，对应需求的"完成/关闭"通知。 */
+    private boolean isCompleted(StatusNodeDO node) {
+        if (node == null || node.getCategory() == null) {
+            return false;
+        }
+        String category = node.getCategory();
+        return "DONE".equalsIgnoreCase(category) || "CANCELED".equalsIgnoreCase(category);
+    }
+
+    private String statusName(StatusNodeDO node) {
+        if (node == null) {
+            return "未知状态";
+        }
+        if (node.getName() != null && !node.getName().isBlank()) {
+            return node.getName();
+        }
+        return node.getCode() == null ? "未知状态" : node.getCode();
+    }
+
+    private String actorName(String actorType, long actorRef) {
+        if ("AGENT".equals(actorType)) {
+            return agentName(actorRef);
+        }
+        return humanName(actorRef);
+    }
+
+    private String humanName(long userId) {
+        UserDO user = userDao.findByIdIncludingDeleted(userId);
+        String name = UserAccountStates.displayName(user);
+        return name == null || name.isBlank() ? String.valueOf(userId) : name;
+    }
+
+    private String agentName(Long agentId) {
+        if (agentId == null) {
+            return "AI 成员";
+        }
+        AgentDO agent = agentDao.findById(agentId);
+        if (agent == null || agent.getName() == null || agent.getName().isBlank()) {
+            return String.valueOf(agentId);
+        }
+        return agent.getName();
+    }
+}

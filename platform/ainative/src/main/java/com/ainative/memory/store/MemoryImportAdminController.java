@@ -1,0 +1,48 @@
+package com.ainative.memory.store;
+
+import com.ainative.access.RequireWorkspaceAccess;
+import com.ainative.access.WorkspaceAccessLevel;
+import com.ainative.common.error.BizException;
+import com.ainative.common.error.ErrorCode;
+import com.ainative.common.result.Result;
+import com.ainative.context.RequestContext;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/memory-imports")
+@RequireWorkspaceAccess(value = WorkspaceAccessLevel.ADMIN, action = "管理记忆导入", actionKey = "access.action.manage_memory_imports")
+public class MemoryImportAdminController {
+    private final MemoryImportAdminService imports;
+
+    public MemoryImportAdminController(MemoryImportAdminService imports) {
+        this.imports = imports;
+    }
+
+    @GetMapping
+    public Result<List<MemoryImportSourceDO>> listSources() {
+        return Result.ok(imports.listSources(tenantId()));
+    }
+
+    @GetMapping("/{sourceId}/receipts")
+    public Result<List<MemoryImportReceiptDO>> listReceipts(@PathVariable long sourceId) {
+        return Result.ok(imports.listReceipts(tenantId(), sourceId));
+    }
+
+    @PutMapping("/{sourceId}/status")
+    public Result<Void> changeStatus(@PathVariable long sourceId, @RequestBody StatusRequest request) {
+        if (request == null) throw new IllegalArgumentException("status request is required");
+        imports.changeStatus(tenantId(), sourceId, request.status(), request.version());
+        return Result.ok(null);
+    }
+
+    private long tenantId() {
+        Long value = RequestContext.get().getCurrentWorkspaceId();
+        if (value == null) throw new BizException(ErrorCode.WORKSPACE_NOT_MEMBER);
+        return value;
+    }
+
+    public record StatusRequest(String status, int version) {
+    }
+}

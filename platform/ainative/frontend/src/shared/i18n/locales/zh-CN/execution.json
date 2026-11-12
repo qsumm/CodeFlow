@@ -1,0 +1,51 @@
+{
+  "list": {
+    "title": "执行台账",
+    "refresh": "刷新",
+    "time": "时间",
+    "workitem": "工作项",
+    "agent": "成员",
+    "executor": "运行器",
+    "status": "状态",
+    "attempt": "尝试",
+    "actions": "操作",
+    "details": "详情",
+    "allAgents": "全部成员",
+    "allStatuses": "全部状态",
+    "workitemId": "工作项 ID",
+    "last7Days": "7 天内",
+    "last30Days": "30 天内",
+    "last90Days": "90 天内",
+    "total_other": "共 {{total}} 条",
+    "empty": "还没有执行留痕"
+  },
+  "detail": {
+    "title": "执行档案",
+    "titleWithId": "执行档案 · #{{id}}",
+    "error": "错误",
+    "workitem": "工作项",
+    "step": "流水线 步骤",
+    "agent": "成员",
+    "executor": "运行器",
+    "attempt": "第几次尝试",
+    "status": "状态",
+    "summary": "结果摘要",
+    "artifacts_other": "产物({{total}})",
+    "noArtifacts": "没有产物",
+    "openWorkitem": "跳转工作项",
+    "viewAgent": "看成员",
+    "close": "关闭",
+    "loading": "加载中"
+  },
+  "status": {
+    "PENDING": "待处理",
+    "PACKAGING": "打包中",
+    "DISPATCHED": "已调度",
+    "ACKED": "已签收",
+    "RUNNING": "运行中",
+    "SUCCEEDED": "成功",
+    "FAILED": "失败",
+    "TIMEOUT": "超时",
+    "CANCELED": "已取消"
+  }
+}

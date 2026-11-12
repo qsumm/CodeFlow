@@ -1,0 +1,146 @@
+/* 钉钉文档式 Markdown 即输即渲染编辑器（需求澄清输入框）。
+   样式对齐 .cf-clarify-md 的渲染观感，编辑态与发送后的气泡保持一致。 */
+
+.cf-markdown-composer {
+  border: 1px solid var(--cf-border);
+  border-radius: 8px;
+  background: var(--cf-field);
+  padding: 12px 14px;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--cf-text);
+  cursor: text;
+}
+
+.cf-markdown-composer:focus-within {
+  border-color: var(--cf-accent-text);
+}
+
+.cf-markdown-composer.is-disabled {
+  background: var(--cf-raised);
+  color: var(--cf-muted);
+  cursor: not-allowed;
+}
+
+.cf-markdown-composer .ProseMirror {
+  outline: none;
+  min-height: 1.7em;
+}
+
+.cf-markdown-composer .ProseMirror p {
+  margin: 0 0 0.5em;
+}
+
+.cf-markdown-composer .ProseMirror p:last-child,
+.cf-markdown-composer .ProseMirror ul:last-child,
+.cf-markdown-composer .ProseMirror ol:last-child,
+.cf-markdown-composer .ProseMirror pre:last-child,
+.cf-markdown-composer .ProseMirror blockquote:last-child,
+.cf-markdown-composer .ProseMirror h1:last-child,
+.cf-markdown-composer .ProseMirror h2:last-child,
+.cf-markdown-composer .ProseMirror h3:last-child,
+.cf-markdown-composer .ProseMirror table:last-child {
+  margin-bottom: 0;
+}
+
+.cf-markdown-composer .ProseMirror h1,
+.cf-markdown-composer .ProseMirror h2,
+.cf-markdown-composer .ProseMirror h3,
+.cf-markdown-composer .ProseMirror h4 {
+  margin: 0.6em 0 0.4em;
+  line-height: 1.4;
+}
+
+.cf-markdown-composer .ProseMirror h1 { font-size: 1.4em; }
+.cf-markdown-composer .ProseMirror h2 { font-size: 1.25em; }
+.cf-markdown-composer .ProseMirror h3 { font-size: 1.1em; }
+
+.cf-markdown-composer .ProseMirror ul,
+.cf-markdown-composer .ProseMirror ol {
+  padding-left: 1.4em;
+  margin: 0 0 0.5em;
+}
+
+.cf-markdown-composer .ProseMirror ul { list-style: disc; }
+.cf-markdown-composer .ProseMirror ol { list-style: decimal; }
+
+.cf-markdown-composer .ProseMirror li > p { margin: 0; }
+.cf-markdown-composer .ProseMirror li { margin: 0.15em 0; }
+
+.cf-markdown-composer .ProseMirror ul[data-type='taskList'] { list-style: none; padding-left: 0; }
+.cf-markdown-composer .ProseMirror li[data-type='taskItem'] { display: flex; gap: 8px; }
+.cf-markdown-composer .ProseMirror li[data-type='taskItem'] > div { flex: 1; min-width: 0; }
+
+.cf-markdown-composer .ProseMirror blockquote {
+  border-left: 3px solid var(--cf-border);
+  color: var(--cf-muted);
+  padding-left: 12px;
+  margin: 0 0 0.5em;
+}
+
+.cf-markdown-composer .ProseMirror code {
+  background: var(--cf-raised);
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 0.9em;
+}
+
+.cf-markdown-composer .ProseMirror pre {
+  background: var(--cf-raised);
+  border: 1px solid var(--cf-border);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 0 0 0.5em;
+  overflow-x: auto;
+  font-size: 0.9em;
+}
+
+.cf-markdown-composer .ProseMirror pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.cf-markdown-composer .ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0 0 0.5em;
+  overflow: hidden;
+}
+
+.cf-markdown-composer .ProseMirror th,
+.cf-markdown-composer .ProseMirror td {
+  border: 1px solid var(--cf-border);
+  padding: 6px 10px;
+  vertical-align: top;
+}
+
+.cf-markdown-composer .ProseMirror th {
+  background: var(--cf-raised);
+  text-align: center;
+  font-weight: 600;
+}
+
+.cf-markdown-composer .ProseMirror hr {
+  border: 0;
+  border-top: 1px solid var(--cf-border);
+  margin: 0.8em 0;
+}
+
+.cf-markdown-composer .ProseMirror a {
+  color: var(--cf-accent-text);
+}
+
+/* Placeholder（tiptap Placeholder 扩展在空段落上打 data-placeholder） */
+.cf-markdown-composer .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--cf-muted);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.cf-markdown-composer .ProseMirror-selectednode,
+.cf-markdown-composer .ProseMirror-selected {
+  outline: 2px solid var(--cf-accent-text);
+}

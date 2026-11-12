@@ -1,0 +1,354 @@
+/* ===== 页面布局骨架(2026-11-10) =====
+ * 所有菜单页的布局在此统一:
+ * - 内容区最大宽度 1440px 居中,超宽屏不再无限拉伸;
+ * - 页面内边距 20px(紧凑 14px),区块间距 14px;
+ * - 列表页标准骨架:横幅 → 统计行 → 工具栏 → 内容面板;
+ * - 详情页标准骨架:横幅 → 两栏(主列 1fr / 侧列 320px),窄屏单列。
+ * 命名空间 .cfds-*,与 PageShell.css 同族。
+ */
+
+/* ---------- 内容区容器 ---------- */
+main .cf-content-frame {
+  /* 2026-11-11 用户红框反馈:内容卡四周和下方露出大片灰底。
+     去掉 max-width 居中(超宽屏两侧各露 ~430px 灰底),
+     并让框架与末位内容卡纵向撑满,白画布铺满整个内容区。 */
+  max-width: none;
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+/* 纵向撑满链:框架 → 页面根 → 正文 → 末位内容卡 */
+main .cf-content-frame > .cfds-page {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+main .cf-content-frame > .cfds-page > .cfds-body {
+  flex: 1 0 auto;
+}
+main .cf-content-frame > .cfds-page > .cfds-body > .cf-content-card:last-child {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+main .cf-content-frame > .cfds-page > .cfds-body > .cf-content-card:last-child > .ant-card-body {
+  flex: 1 0 auto;
+}
+
+/* 页面根:统一纵向节奏 */
+.cfds-page > .cfds-body > * + * {
+  margin-top: 14px;
+}
+
+/* ---------- 列表页骨架 ---------- */
+.cfds-list-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* 统计行:3-5 格等宽 */
+.cfds-stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+/* 四列定栅格(2026-11-11 视觉评审:auto-fit 会把 8 张卡撑成 7+1,右下塌出空白带) */
+.cfds-stat-row--quad {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 1100px) {
+  .cfds-stat-row--quad { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .cfds-stat-row--quad { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- 详情页骨架:主列 + 侧列 ---------- */
+.cfds-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 14px;
+  align-items: start;
+}
+
+.cfds-detail-layout__side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: sticky;
+  top: 12px;
+}
+
+/* 窄屏折叠为单列,侧列内容排到主列之后 */
+@media (max-width: 1080px) {
+  .cfds-detail-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cfds-detail-layout__side {
+    position: static;
+  }
+}
+
+/* ---------- 双栏卡片网格(设置类页面) ---------- */
+.cfds-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 14px;
+}
+
+/* ---------- 表格容器:圆角裁切 + 横向滚动保护 ---------- */
+.cfds-table-wrap {
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid var(--cf-border);
+}
+
+.cfds-table-wrap .ant-table {
+  background: transparent;
+}
+
+.cfds-table-wrap .ant-table-thead > tr > th {
+  background: var(--cf-field);
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--cf-muted);
+  border-bottom: 1px solid var(--cf-border);
+}
+
+.cfds-table-wrap .ant-table-tbody > tr > td {
+  border-bottom: 1px solid color-mix(in srgb, var(--cf-border) 60%, transparent);
+}
+
+.cfds-table-wrap .ant-table-tbody > tr:last-child > td {
+  border-bottom: none;
+}
+
+.cfds-table-wrap .ant-table-tbody > tr:hover > td {
+  background: color-mix(in srgb, var(--cf-accent-rgb) 6%, transparent);
+}
+
+/* 行内操作:统一小号 text 按钮 */
+.cfds-table-wrap .ant-table-cell .ant-btn-sm {
+  height: 26px;
+  padding-inline: 6px;
+}
+
+/* ---------- 表单页骨架:双栏表单(大表单不再一列到底) ---------- */
+.cfds-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 0 28px;
+}
+
+/* ---------- 全站表单控件统一高度(2026-11-10) ----------
+ * 不再要求每个页面都记得挂 .cfds-form:antd Form 的
+ * 单行控件(输入框/下拉/数字/日期)一律 34px,消灭「38px 输入框配 32px 下拉」。
+ * 弹窗挂在 body 下(不在 main 内),故不加 main 前缀。多选下拉与 textarea 不限高。
+.ant-form-item input.ant-input,
+.ant-form-item .ant-input-affix-wrapper,
+.ant-form-item .ant-input-number,
+.ant-form-item .ant-picker,
+.ant-form-item .ant-select-single .ant-select-selector {
+  height: 34px;
+  border-radius: 8px;
+}
+
+.ant-form-item .ant-select-single .ant-select-selection-item,
+.ant-form-item .ant-select-single .ant-select-selection-placeholder {
+  line-height: 32px;
+}
+
+/* ---------- 分段器全站统一(2026-11-10) ----------
+ * antd 默认 42px 的分段器与 34px 工具件同排时高出一截;统一压到 32px 外壳。
+ */
+.ant-segmented {
+  height: 32px;
+}
+
+.ant-segmented .ant-segmented-item {
+  height: 28px;
+  line-height: 28px;
+}
+
+/* ---------- antd 表单对齐(2026-11-10) ----------
+ * 给保留 antd Form 的页面挂 .cfds-form,统一三件事:
+ * 1) 标签列:13px / 600 / muted 色,必填星号始终在标签前;
+ * 2) 控件列:输入框/下拉/数字/日期同高 34px、圆角 8px,textarea 只统一圆角;
+ * 3) 行距统一 14px。同一表单内不再出现大一号输入框配小一号下拉。
+ */
+.cfds-form .ant-form-item {
+  margin-bottom: 14px;
+}
+
+/* 竖排表单限宽阅读列,超宽屏下控件不再拉伸到整行 */
+.cfds-form {
+  max-width: 760px;
+}
+
+.cfds-form .ant-form-item .ant-form-item-label > label {
+  color: var(--cf-muted);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.cfds-form input.ant-input,
+.cfds-form .ant-input-affix-wrapper,
+.cfds-form .ant-input-number,
+.cfds-form .ant-picker {
+  height: 34px;
+  border-radius: 8px;
+}
+
+.cfds-form textarea.ant-input {
+  border-radius: 8px;
+}
+
+.cfds-form .ant-select-single:not(.ant-select-customize-input) .ant-select-selector {
+  height: 34px !important;
+  border-radius: 8px !important;
+}
+
+.cfds-form .ant-select-single:not(.ant-select-customize-input) .ant-select-selection-item,
+.cfds-form .ant-select-single:not(.ant-select-customize-input) .ant-select-selection-placeholder {
+  line-height: 32px !important;
+}
+
+.cfds-form .ant-select:not(.ant-select-borderless) {
+  border-radius: 8px;
+}
+
+.cfds-form .ant-input-number {
+  width: 100%;
+}
+
+.cfds-form .ant-form-item-extra,
+.cfds-form .ant-form-item .ant-form-item-extra {
+  font-size: 12px;
+  color: var(--cf-muted);
+}
+
+/* ---------- antd Card 的 cfd 统一形态 ----------
+ * 测试用 .closest('.ant-card') 定位分区的页面(如 AI 成员编辑页)保留 antd Card,
+ * 挂 .cfds-card-shell 换成与 SurfaceCard 一致的墨面板外观,不动 DOM 结构。
+ */
+.cfds-card-shell.ant-card {
+  background: var(--cf-panel);
+  border: 1px solid var(--cf-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.cfds-card-shell > .ant-card-head {
+  min-height: 0;
+  padding: 14px 18px;
+  background: transparent;
+  border-bottom: 1px solid var(--cf-border);
+}
+
+.cfds-card-shell > .ant-card-head .ant-card-head-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.cfds-card-shell > .ant-card-body {
+  padding: 16px 18px;
+}
+
+/* ---------- 空态:居中 + 主辅文案 + 行动按钮 ---------- */
+.cfds-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 44px 20px;
+  text-align: center;
+}
+
+.cfds-empty__icon {
+  font-size: 34px;
+  color: var(--cf-muted);
+  opacity: .6;
+}
+
+.cfds-empty__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cf-text);
+}
+
+.cfds-empty__desc {
+  font-size: 12px;
+  color: var(--cf-muted);
+  max-width: 46ch;
+}
+
+.cfds-empty__action {
+  margin-top: 8px;
+}
+
+/* ---------- 键盘焦点:全局统一可见描边 ---------- */
+.cfds-page :focus-visible {
+  outline: 2px solid rgba(var(--cf-accent-rgb), .55);
+  outline-offset: 1px;
+  border-radius: 6px;
+}
+
+/* 直连变体:部分页面(如工作项列表)的 Card 是 frame 直接子级 */
+main .cf-content-frame > .cf-content-card:last-child {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+main .cf-content-frame > .cf-content-card:last-child > .ant-card-body {
+  flex: 1 0 auto;
+}
+
+/* main 纵向 flex(2026-11-11):内容框架 flex:1 0 auto 撑满,
+   末位白卡随之铺满,内容少时下方不再露出大片灰底。 */
+main.cf-main { display: flex; flex-direction: column; }
+
+/* 无类名包装 div 的页面(如运行器页):Card 外层是无类名 div,一并撑满 */
+main .cf-content-frame > div > .cf-content-card:last-child,
+main .cf-content-frame > div:last-child > .ant-card {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+main .cf-content-frame > div:last-child > .ant-card > .ant-card-body {
+  flex: 1 0 auto;
+}
+main .cf-content-frame > div:last-child {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Tabs 页(hub-page / 定时任务等):让当前 TabPane 里的白卡也铺满 */
+main .cf-content-frame > .hub-page {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+main .cf-content-frame .ant-tabs {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+main .cf-content-frame .ant-tabs-content-holder,
+main .cf-content-frame .ant-tabs-content,
+main .cf-content-frame .ant-tabs-tabpane {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+main .cf-content-frame .ant-tabs-tabpane > .ant-card:last-child {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+main .cf-content-frame .ant-tabs-tabpane > .ant-card:last-child > .ant-card-body {
+  flex: 1 0 auto;
+}

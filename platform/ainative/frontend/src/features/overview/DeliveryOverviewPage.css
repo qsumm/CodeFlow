@@ -1,0 +1,24 @@
+.delivery-overview-page { display: flex; flex-direction: column; gap: 16px; }
+
+.overview-stat-detail { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; color: var(--cf-muted); font-size: 12px; }
+
+/* 趋势与说明改为纵向:横排时说明会被挤成 2-3 字一行的竖排(视觉评审) */
+.overview-trend { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+
+.overview-sparkline { display: block; line-height: 0; }
+
+.overview-caption { margin: 0 0 12px; color: var(--cf-muted); font-size: 12px; }
+
+.overview-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 14px; align-items: start; }
+
+.overview-row-decision > td { background: color-mix(in srgb, var(--cf-warning) 9%, transparent); }
+
+/* 失败原因卡独占一行(第三张表卡只有一张,不跨列会在第二行右侧留空档);全宽后表格列距随之舒展 */
+.overview-lists > [data-testid='overview-failures'] { grid-column: 1 / -1; }
+.overview-lists > [data-testid='overview-failures'] .ant-table { --failures-col-pad: 16px; }
+
+/* ── KPI 栅格统一基线(2026-11-12):八卡同构等高 ──
+ * hint 行数不一(1~4 行)导致卡片高低参差;hint 统一后以 min-height 保底,
+ * 稀疏卡不塌陷,密集卡自然撑高,同排 grid stretch 对齐。 */
+.cfds-stat-row--quad .cfds-stat { min-height: 132px; }
+.cfds-stat-row--quad .cfds-stat__hint { min-height: 34px; }

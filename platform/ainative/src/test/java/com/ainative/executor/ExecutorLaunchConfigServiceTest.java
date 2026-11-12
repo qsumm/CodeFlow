@@ -1,0 +1,679 @@
+package com.ainative.executor;
+
+import com.ainative.common.error.BizException;
+import com.ainative.executor.dto.CreateExecutorRequest;
+import com.ainative.executor.dto.ExecutorLaunchConfigVO;
+import com.ainative.executor.dto.UpdateExecutorLaunchConfigRequest;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * The database is the only source of the executor launch config, shared by the page's 启动命令 dialog, the page's
+ * command generation and every MCP executor tool. These tests pin each path: creation resolves and validates the
+ * config before anything is written, the page read clears a rotated-out model and bumps the optimistic-lock
+ * version, the MCP read is strictly read-only, writes validate against the live catalog and the version guard, and
+ * command generation refuses an incomplete config instead of padding it with defaults.
+ */
+class ExecutorLaunchConfigServiceTest {
+
+    private static final long TENANT = 100L;
+    private static final long USER = 7L;
+
+    ExecutorDao executorDao;
+    ProviderModelCatalogService modelCatalogService;
+    ExecutorLaunchOptionsService options;
+    ExecutorLaunchConfigService service;
+
+    @BeforeEach
+    void setUp() {
+        executorDao = mock(ExecutorDao.class);
+        // read() 未打桩 → 返回 null → options.models() 回退到 FALLBACK_MODELS（含 qmodel_38max，不含 removed-model）
+        modelCatalogService = mock(ProviderModelCatalogService.class);
+        options = new ExecutorLaunchOptionsService(modelCatalogService);
+        service = new ExecutorLaunchConfigService(executorDao, options);
+    }
+
+    private ExecutorDO executor(long id, String clientKind, String launchConfig, Integer configVersion) {
+        ExecutorDO executor = new ExecutorDO();
+        executor.setId(id);
+        executor.setTenantId(TENANT);
+        executor.setClientKind(clientKind);
+        executor.setLaunchConfig(launchConfig);
+        executor.setConfigVersion(configVersion);
+        return executor;
+    }
+
+    private UpdateExecutorLaunchConfigRequest req(Integer version, String memoryMode, String model,
+                                                  String reasoningEffort, String contextWindow) {
+        UpdateExecutorLaunchConfigRequest request = new UpdateExecutorLaunchConfigRequest();
+        request.setVersion(version);
+        request.setMemoryMode(memoryMode);
+        request.setModel(model);
+        request.setReasoningEffort(reasoningEffort);
+        request.setContextWindow(contextWindow);
+        return request;
+    }
+
+    @Test
+    void previewValidatesTheDraftAndPreservesSavedLaunchFieldsWithoutWriting() {
+        String original = "{\"memoryMode\":\"platform\",\"model\":\"auto\",\"reasoningEffort\":\"medium\","
+                + "\"contextWindow\":\"260000\",\"runtimeVersion\":\"0.3.9\",\"workspaceRoot\":\"/data/tasks\","
+                + "\"daemonName\":\"saved-name\",\"debug\":true}";
+        ExecutorDO row = executor(9L, "QODER_CLI", original, 4);
+        when(executorDao.findById(9L)).thenReturn(row);
+        var request = req(4, "none", "ultimate", "low", "1000000");
+        request.setMaxConcurrentDispatches(7);
+
+        var preview = service.previewConfig(9L, TENANT, request);
+
+        assertEquals("ultimate", preview.model);
+        assertEquals("low", preview.reasoningEffort);
+        assertEquals("1000000", preview.contextWindow);
+        assertEquals("none", preview.memoryMode);
+        assertEquals(7, preview.maxConcurrentDispatches);
+        assertEquals("0.3.9", preview.runtimeVersion);
+        assertEquals("/data/tasks", preview.workspaceRoot);
+        assertEquals("saved-name", preview.daemonName);
+        assertTrue(preview.debug);
+        assertEquals(original, row.getLaunchConfig());
+        assertEquals(4, row.getConfigVersion());
+        verify(executorDao, never()).updateLaunchConfig(anyLong(), anyLong(), anyString(), anyInt(), anyLong());
+        verify(executorDao, never()).updateLaunchConfigWithClientKind(anyLong(), anyLong(), anyString(), anyString(), anyInt(), anyLong());
+        request.setModel("removed-model");
+        assertThrows(BizException.class, () -> service.previewConfig(9L, TENANT, request));
+        request.setModel("ultimate");
+        request.setMaxConcurrentDispatches(11);
+        assertThrows(BizException.class, () -> service.previewConfig(9L, TENANT, request));
+    }
+
+    @Test
+    void previewRejectsMissingOrStaleVersionsAndAnotherWorkspace() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI", "{}", 4));
+        assertThrows(BizException.class, () -> service.previewConfig(9L, TENANT, null));
+        assertThrows(BizException.class, () -> service.previewConfig(9L, TENANT, req(null, "none", "auto", "medium", "260000")));
+        var stale = assertThrows(BizException.class, () -> service.previewConfig(9L, TENANT, req(3, "none", "auto", "medium", "260000")));
+        assertEquals(com.ainative.common.error.ErrorCode.EXECUTOR_LAUNCH_CONFIG_VERSION_CONFLICT.getCode(), stale.getCode());
+        assertThrows(BizException.class, () -> service.previewConfig(9L, TENANT + 1, req(4, "none", "auto", "medium", "260000")));
+        verify(executorDao, never()).updateLaunchConfig(anyLong(), anyLong(), anyString(), anyInt(), anyLong());
+    }
+
+    @Test
+    void concurrencyDefaultsAndValidationMatchLaunchSettings() {
+        CreateExecutorRequest request = new CreateExecutorRequest();
+        request.setClientKind("QODER_CLI");
+        assertEquals(5, service.resolveForCreate(request).maxConcurrentDispatches);
+        request.setMaxConcurrentDispatches(1);
+        assertEquals(1, service.resolveForCreate(request).maxConcurrentDispatches);
+        request.setMaxConcurrentDispatches(10);
+        assertEquals(10, service.resolveForCreate(request).maxConcurrentDispatches);
+        for (int invalid : new int[]{0, -1, 11, 50}) {
+            request.setMaxConcurrentDispatches(invalid);
+            assertThrows(BizException.class, () -> service.resolveForCreate(request));
+        }
+    }
+
+    @Test
+    void concurrencyRoundTripsAndOlderCallersPreserveIt() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "CLAUDE_CODE",
+                "{\"memoryMode\":\"platform\",\"maxConcurrentDispatches\":5}", 2));
+        assertEquals(5, service.readStoredConfig(9L, TENANT).getMaxConcurrentDispatches());
+        when(executorDao.updateLaunchConfig(eq(9L), eq(TENANT), anyString(), eq(2), eq(USER))).thenReturn(1);
+        var request = req(2, "platform", null, null, null);
+        assertEquals(5, service.updateConfig(9L, TENANT, request, USER).getMaxConcurrentDispatches());
+        request.setMaxConcurrentDispatches(3);
+        assertEquals(3, service.updateConfig(9L, TENANT, request, USER).getMaxConcurrentDispatches());
+        ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+        verify(executorDao, org.mockito.Mockito.times(2)).updateLaunchConfig(eq(9L), eq(TENANT), json.capture(), eq(2), eq(USER));
+        assertTrue(json.getValue().contains("\"maxConcurrentDispatches\":3"));
+    }
+
+    @Test void formUpdatesPreserveCommandOverridesAndExplicitBlankClearsThem() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI",
+                "{\"memoryMode\":\"platform\",\"model\":\"auto\",\"runtimeVersion\":\"0.3.9\","
+                        + "\"workspaceRoot\":\"/data/tasks\",\"daemonName\":\"my-daemon\",\"debug\":true}", 4));
+        when(executorDao.updateLaunchConfig(eq(9L), eq(TENANT), anyString(), eq(4), eq(USER))).thenReturn(1);
+        var request = req(4, "none", "auto", "medium", "260000");
+        var saved = service.updateConfig(9L, TENANT, request, USER);
+        assertEquals("0.3.9", saved.getRuntimeVersion());
+        assertEquals("/data/tasks", saved.getWorkspaceRoot());
+        assertEquals("my-daemon", saved.getDaemonName());
+        assertTrue(saved.getDebug());
+        request.setRuntimeVersion(""); request.setWorkspaceRoot(""); request.setDaemonName(""); request.setDebug(false);
+        saved = service.updateConfig(9L, TENANT, request, USER);
+        assertNull(saved.getRuntimeVersion()); assertNull(saved.getWorkspaceRoot()); assertNull(saved.getDaemonName());
+        assertFalse(saved.getDebug());
+    }
+
+    @Test void applyRequiresTheSavedVersionFromTheSameExecutorSnapshot() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "CLAUDE_CODE", "{\"memoryMode\":\"platform\"}", 4));
+        assertThrows(BizException.class, () -> service.requireCompleteConfig(9L, TENANT, 3));
+        assertEquals("platform", service.requireCompleteConfig(9L, TENANT, 4).memoryMode);
+    }
+
+    @Test
+    void legacySavedConcurrencyDefaultsToFiveWithoutWriting() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "CLAUDE_CODE", "{\"memoryMode\":\"platform\"}", 1));
+        assertEquals(5, service.readStoredConfig(9L, TENANT).getMaxConcurrentDispatches());
+        assertEquals(5, service.requireCompleteConfig(9L, TENANT).maxConcurrentDispatches);
+        verify(executorDao, never()).updateLaunchConfig(anyLong(), anyLong(), anyString(), anyInt(), anyLong());
+    }
+
+    // ---------- readStoredConfig：MCP 只读 ----------
+
+    @Test
+    void readStoredConfig_throws_not_found_when_the_executor_is_missing() {
+        when(executorDao.findById(9L)).thenReturn(null);
+
+        // An executor that does not exist in this workspace is an error, not an empty config.
+        BizException ex = assertThrows(BizException.class, () -> service.readStoredConfig(9L, TENANT));
+        assertEquals("17001", ex.getCode());
+    }
+
+    @Test
+    void readStoredConfig_throws_not_found_on_tenant_mismatch() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI", null, 1));
+
+        BizException ex = assertThrows(BizException.class, () -> service.readStoredConfig(9L, 999L));
+        assertEquals("17001", ex.getCode());
+    }
+
+    @Test
+    void readStoredConfig_never_writes_back_a_rotated_out_model() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI",
+                "{\"model\":\"removed-model\",\"memoryMode\":\"none\"}", 6));
+
+        ExecutorLaunchConfigVO vo = service.readStoredConfig(9L, TENANT);
+
+        // 只读：即便模型已不可用也原样返回，生成命令时再显式报 17006 要求重新保存
+        assertEquals("removed-model", vo.getModel());
+        assertEquals(6, vo.getVersion());
+        verify(executorDao, never()).updateLaunchConfig(anyLong(), anyLong(), anyString(), anyInt(), anyLong());
+    }
+
+    @Test
+    void readStoredConfig_returns_all_null_at_version_1_when_never_configured() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI", null, null));
+
+        ExecutorLaunchConfigVO vo = service.readStoredConfig(9L, TENANT);
+
+        // 未配置的执行器如实返回 null，不回填任何系统默认值
+        assertNull(vo.getModel());
+        assertNull(vo.getReasoningEffort());
+        assertNull(vo.getContextWindow());
+        assertNull(vo.getMemoryMode());
+        assertEquals(1, vo.getVersion());
+    }
+
+    @Test
+    void readStoredConfig_returns_only_memory_mode_for_a_non_qoder_executor() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "CODEX_CLI",
+                "{\"model\":\"qmodel_38max\",\"memoryMode\":\"provider-local\"}", 2));
+
+        ExecutorLaunchConfigVO vo = service.readStoredConfig(9L, TENANT);
+
+        assertNull(vo.getModel());
+        assertEquals("provider-local", vo.getMemoryMode());
+    }
+
+    // ---------- updateConfig：页面写入 ----------
+
+    @Test
+    void updateConfig_persists_a_valid_qoder_config_and_bumps_version() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI", null, 1));
+        when(executorDao.updateLaunchConfig(eq(9L), eq(TENANT), anyString(), eq(1), eq(USER))).thenReturn(1);
+
+        ExecutorLaunchConfigVO vo = service.updateConfig(9L, TENANT,
+                req(1, "none", "qmodel_38max", "low", "400000"), USER);
+
+        assertEquals("qmodel_38max", vo.getModel());
+        assertEquals("low", vo.getReasoningEffort());
+        assertEquals("400000", vo.getContextWindow());
+        assertEquals("none", vo.getMemoryMode());
+        assertEquals(2, vo.getVersion());
+        ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+        verify(executorDao).updateLaunchConfig(eq(9L), eq(TENANT), json.capture(), eq(1), eq(USER));
+        assertTrue(json.getValue().contains("\"model\":\"qmodel_38max\""));
+        assertTrue(json.getValue().contains("\"memoryMode\":\"none\""));
+    }
+
+    @Test
+    void updateConfig_fills_defaults_when_optional_fields_are_blank() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI", null, 1));
+        when(executorDao.updateLaunchConfig(eq(9L), eq(TENANT), anyString(), eq(1), eq(USER))).thenReturn(1);
+
+        ExecutorLaunchConfigVO vo = service.updateConfig(9L, TENANT,
+                req(1, null, "qmodel_38max", null, null), USER);
+
+        assertEquals("platform", vo.getMemoryMode());
+        assertEquals("medium", vo.getReasoningEffort());
+        assertEquals("260000", vo.getContextWindow());
+    }
+
+    @Test
+    void updateConfig_rejects_a_model_the_catalog_no_longer_offers() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI", null, 1));
+
+        BizException ex = assertThrows(BizException.class, () -> service.updateConfig(9L, TENANT,
+                req(1, "platform", "removed-model", "medium", "260000"), USER));
+        assertEquals("17006", ex.getCode());
+        verify(executorDao, never()).updateLaunchConfig(anyLong(), anyLong(), anyString(), anyInt(), anyLong());
+    }
+
+    @Test
+    void updateConfig_rejects_a_missing_version() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI", null, 1));
+
+        BizException ex = assertThrows(BizException.class, () -> service.updateConfig(9L, TENANT,
+                req(null, "platform", "qmodel_38max", "medium", "260000"), USER));
+        assertEquals("10001", ex.getCode());
+    }
+
+    @Test
+    void updateConfig_rejects_a_null_request() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI", null, 1));
+
+        BizException ex = assertThrows(BizException.class, () -> service.updateConfig(9L, TENANT, null, USER));
+        assertEquals("10001", ex.getCode());
+    }
+
+    @Test
+    void updateConfig_reports_a_conflict_when_the_version_moved_on() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI", null, 3));
+        when(executorDao.updateLaunchConfig(eq(9L), eq(TENANT), anyString(), eq(3), eq(USER))).thenReturn(0);
+
+        BizException ex = assertThrows(BizException.class, () -> service.updateConfig(9L, TENANT,
+                req(3, "platform", "qmodel_38max", "medium", "260000"), USER));
+        assertEquals("17005", ex.getCode());
+    }
+
+    @Test
+    void updateConfig_stores_only_memory_mode_for_a_non_qoder_executor() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "CLAUDE_CODE", null, 1));
+        when(executorDao.updateLaunchConfig(eq(9L), eq(TENANT), anyString(), eq(1), eq(USER))).thenReturn(1);
+
+        ExecutorLaunchConfigVO vo = service.updateConfig(9L, TENANT,
+                req(1, "none", "qmodel_38max", "low", "400000"), USER);
+
+        assertNull(vo.getModel());
+        assertEquals("none", vo.getMemoryMode());
+        assertEquals(2, vo.getVersion());
+        ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+        verify(executorDao).updateLaunchConfig(eq(9L), eq(TENANT), json.capture(), eq(1), eq(USER));
+        assertFalse(json.getValue().contains("model"));
+        assertTrue(json.getValue().contains("\"memoryMode\":\"none\""));
+    }
+
+    @Test
+    void updateConfig_propagates_invalid_memory_mode() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI", null, 1));
+
+        BizException ex = assertThrows(BizException.class, () -> service.updateConfig(9L, TENANT,
+                req(1, "bogus", "qmodel_38max", "medium", "260000"), USER));
+        assertEquals("27003", ex.getCode());
+    }
+
+    @Test
+    void updateConfig_throws_not_found_on_tenant_mismatch() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI", null, 1));
+
+        BizException ex = assertThrows(BizException.class, () -> service.updateConfig(9L, 999L,
+                req(1, "platform", "qmodel_38max", "medium", "260000"), USER));
+        assertEquals("17001", ex.getCode());
+    }
+
+    // ---------- updateConfig：历史缺失类型执行器的恢复 ----------
+
+    private UpdateExecutorLaunchConfigRequest recoveryReq(String clientKind, Integer version, String memoryMode,
+                                                          String model, String reasoningEffort, String contextWindow) {
+        UpdateExecutorLaunchConfigRequest request = req(version, memoryMode, model, reasoningEffort, contextWindow);
+        request.setClientKind(clientKind);
+        return request;
+    }
+
+    @Test
+    void updateConfig_recovers_a_legacy_kindless_executor_with_the_chosen_qoder_kind() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, null, "{\"memoryMode\":\"platform\"}", 1));
+        when(executorDao.updateLaunchConfigWithClientKind(eq(9L), eq(TENANT), anyString(), eq("QODER_CN_CLI"),
+                eq(1), eq(USER))).thenReturn(1);
+
+        ExecutorLaunchConfigVO vo = service.updateConfig(9L, TENANT,
+                recoveryReq("QODER_CN_CLI", 1, "none", "qmodel_38max", "low", "400000"), USER);
+
+        // 类型与启动配置一次写入：返回值反映补选后数据库应持有的内容
+        assertEquals("qmodel_38max", vo.getModel());
+        assertEquals("none", vo.getMemoryMode());
+        assertEquals(2, vo.getVersion());
+        ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+        verify(executorDao).updateLaunchConfigWithClientKind(eq(9L), eq(TENANT), json.capture(), eq("QODER_CN_CLI"),
+                eq(1), eq(USER));
+        assertTrue(json.getValue().contains("\"model\":\"qmodel_38max\""));
+        verify(executorDao, never()).updateLaunchConfig(anyLong(), anyLong(), anyString(), anyInt(), anyLong());
+    }
+
+    @Test
+    void updateConfig_canonicalizes_the_recovered_kind_and_fills_the_dialog_defaults() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "  ", null, 1));
+        when(executorDao.updateLaunchConfigWithClientKind(eq(9L), eq(TENANT), anyString(), eq("QODER_CLI"),
+                eq(1), eq(USER))).thenReturn(1);
+
+        // 空白类型的执行器同样走恢复路径；小写输入被归一成规范枚举值，未传字段按弹窗默认值补齐
+        ExecutorLaunchConfigVO vo = service.updateConfig(9L, TENANT,
+                recoveryReq("qoder_cli", 1, null, "qmodel_38max", null, null), USER);
+
+        assertEquals("qmodel_38max", vo.getModel());
+        assertEquals("platform", vo.getMemoryMode());
+        assertEquals("medium", vo.getReasoningEffort());
+        assertEquals("260000", vo.getContextWindow());
+        verify(executorDao).updateLaunchConfigWithClientKind(eq(9L), eq(TENANT), anyString(), eq("QODER_CLI"),
+                eq(1), eq(USER));
+    }
+
+    @Test
+    void updateConfig_rejects_a_kindless_save_without_a_client_kind() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, null, "{\"memoryMode\":\"platform\"}", 1));
+
+        // 不带类型保存仍然生成不了命令，必须一次补齐而不是继续攒下不完整状态
+        BizException ex = assertThrows(BizException.class, () -> service.updateConfig(9L, TENANT,
+                req(1, "platform", "qmodel_38max", "medium", "260000"), USER));
+        assertEquals("17011", ex.getCode());
+        verify(executorDao, never()).updateLaunchConfig(anyLong(), anyLong(), anyString(), anyInt(), anyLong());
+        verify(executorDao, never()).updateLaunchConfigWithClientKind(anyLong(), anyLong(), anyString(), anyString(),
+                anyInt(), anyLong());
+    }
+
+    @Test
+    void updateConfig_rejects_a_recovery_kind_outside_the_creatable_set() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, null, null, 1));
+
+        BizException ex = assertThrows(BizException.class, () -> service.updateConfig(9L, TENANT,
+                recoveryReq("QODER_WEB", 1, "platform", "qmodel_38max", "medium", "260000"), USER));
+        assertEquals("17009", ex.getCode());
+        verify(executorDao, never()).updateLaunchConfig(anyLong(), anyLong(), anyString(), anyInt(), anyLong());
+        verify(executorDao, never()).updateLaunchConfigWithClientKind(anyLong(), anyLong(), anyString(), anyString(),
+                anyInt(), anyLong());
+    }
+
+    @Test
+    void updateConfig_reports_a_conflict_when_the_kind_recovery_write_loses_the_version_race() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, null, null, 1));
+        when(executorDao.updateLaunchConfigWithClientKind(eq(9L), eq(TENANT), anyString(), eq("QODER_CLI"),
+                eq(1), eq(USER))).thenReturn(0);
+
+        BizException ex = assertThrows(BizException.class, () -> service.updateConfig(9L, TENANT,
+                recoveryReq("QODER_CLI", 1, "platform", "qmodel_38max", "medium", "260000"), USER));
+        assertEquals("17005", ex.getCode());
+    }
+
+    @Test
+    void updateConfig_ignores_the_same_kind_on_a_typed_executor_and_keeps_the_original_write() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI", null, 1));
+        when(executorDao.updateLaunchConfig(eq(9L), eq(TENANT), anyString(), eq(1), eq(USER))).thenReturn(1);
+
+        // 旧客户端误带同名类型不改变任何行为：仍走原更新路径，类型列不动
+        ExecutorLaunchConfigVO vo = service.updateConfig(9L, TENANT,
+                recoveryReq("qoder_cli", 1, "platform", "qmodel_38max", "medium", "260000"), USER);
+
+        assertEquals("qmodel_38max", vo.getModel());
+        verify(executorDao).updateLaunchConfig(eq(9L), eq(TENANT), anyString(), eq(1), eq(USER));
+        verify(executorDao, never()).updateLaunchConfigWithClientKind(anyLong(), anyLong(), anyString(), anyString(),
+                anyInt(), anyLong());
+    }
+
+    @Test
+    void updateConfig_refuses_to_rewrite_the_kind_of_a_typed_executor() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI", null, 1));
+
+        BizException ex = assertThrows(BizException.class, () -> service.updateConfig(9L, TENANT,
+                recoveryReq("QODER_CN_CLI", 1, "platform", "qmodel_38max", "medium", "260000"), USER));
+        assertEquals("10001", ex.getCode());
+        assertTrue(ex.getMessage().contains("QODER_CLI"));
+        verify(executorDao, never()).updateLaunchConfig(anyLong(), anyLong(), anyString(), anyInt(), anyLong());
+        verify(executorDao, never()).updateLaunchConfigWithClientKind(anyLong(), anyLong(), anyString(), anyString(),
+                anyInt(), anyLong());
+    }
+
+    @Test
+    void updateConfig_validates_the_recovered_config_against_the_chosen_qoder_kind() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, null, null, 1));
+
+        // 恢复路径的模型校验与正常保存一致：不可用模型直接拒绝，且不落任何写入
+        BizException ex = assertThrows(BizException.class, () -> service.updateConfig(9L, TENANT,
+                recoveryReq("QODER_CLI", 1, "platform", "removed-model", "medium", "260000"), USER));
+        assertEquals("17006", ex.getCode());
+        verify(executorDao, never()).updateLaunchConfig(anyLong(), anyLong(), anyString(), anyInt(), anyLong());
+        verify(executorDao, never()).updateLaunchConfigWithClientKind(anyLong(), anyLong(), anyString(), anyString(),
+                anyInt(), anyLong());
+    }
+
+    // ---------- resolveForCreate：创建时的校验与默认值 ----------
+
+    private CreateExecutorRequest create(String clientKind, String memoryMode, String model,
+                                         String reasoningEffort, String contextWindow) {
+        CreateExecutorRequest request = new CreateExecutorRequest();
+        request.setName("dev-machine-01");
+        request.setClientKind(clientKind);
+        request.setMemoryMode(memoryMode);
+        request.setModel(model);
+        request.setReasoningEffort(reasoningEffort);
+        request.setContextWindow(contextWindow);
+        return request;
+    }
+
+    @Test
+    void resolveForCreate_fills_the_dialog_defaults_for_an_omitted_launch_value() {
+        ExecutorLaunchConfigService.LaunchConfig config =
+                service.resolveForCreate(create("QODER_CLI", null, null, null, null));
+
+        assertEquals("auto", config.model);
+        assertEquals("medium", config.reasoningEffort);
+        assertEquals("260000", config.contextWindow);
+        assertEquals("platform", config.memoryMode);
+        verify(executorDao, never()).updateLaunchConfig(anyLong(), anyLong(), anyString(), anyInt(), anyLong());
+    }
+
+    @Test
+    void resolveForCreate_keeps_explicit_values_verbatim() {
+        ExecutorLaunchConfigService.LaunchConfig config =
+                service.resolveForCreate(create("QODER_CN_CLI", "none", "lite", "low", "400000"));
+
+        assertEquals("lite", config.model);
+        assertEquals("low", config.reasoningEffort);
+        assertEquals("400000", config.contextWindow);
+        assertEquals("none", config.memoryMode);
+    }
+
+    @Test
+    void resolveForCreate_derives_the_ultimate_reasoning_effort() {
+        ExecutorLaunchConfigService.LaunchConfig config =
+                service.resolveForCreate(create("QODER_CLI", null, "ultimate", null, null));
+
+        assertEquals("ultimate", config.model);
+        assertEquals("high", config.reasoningEffort);
+    }
+
+    @Test
+    void resolveForCreate_rejects_a_model_the_catalog_no_longer_offers() {
+        // 显式传入的模型不可用必须报错，不能悄悄替换成别的 id 落库
+        BizException ex = assertThrows(BizException.class, () ->
+                service.resolveForCreate(create("QODER_CLI", null, "removed-model", null, null)));
+        assertEquals("17006", ex.getCode());
+    }
+
+    @Test
+    void resolveForCreate_rejects_an_unknown_context_window() {
+        BizException ex = assertThrows(BizException.class, () ->
+                service.resolveForCreate(create("QODER_CLI", null, null, null, "512000")));
+        assertEquals("27003", ex.getCode());
+    }
+
+    @Test
+    void resolveForCreate_stores_only_memory_mode_for_a_non_qoder_client_kind() {
+        ExecutorLaunchConfigService.LaunchConfig config =
+                service.resolveForCreate(create("CLAUDE_CODE", "provider-local", "lite", "low", "400000"));
+
+        assertEquals("provider-local", config.memoryMode);
+        assertNull(config.model);
+        assertNull(config.reasoningEffort);
+        assertNull(config.contextWindow);
+    }
+
+    @Test
+    void resolveForCreate_defaults_memory_mode_when_the_request_is_null() {
+        ExecutorLaunchConfigService.LaunchConfig config = service.resolveForCreate(null);
+
+        assertEquals("platform", config.memoryMode);
+        assertNull(config.model);
+    }
+
+    // ---------- requireCompleteConfig：生成命令前读取 ----------
+
+    @Test
+    void requireCompleteConfig_returns_the_stored_config_verbatim() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI",
+                "{\"model\":\"qmodel_38max\",\"reasoningEffort\":\"low\",\"contextWindow\":\"400000\","
+                        + "\"memoryMode\":\"none\"}", 4));
+
+        ExecutorLaunchConfigService.LaunchConfig config = service.requireCompleteConfig(9L, TENANT);
+
+        assertEquals("qmodel_38max", config.model);
+        assertEquals("low", config.reasoningEffort);
+        assertEquals("400000", config.contextWindow);
+        assertEquals("none", config.memoryMode);
+        verify(executorDao, never()).updateLaunchConfig(anyLong(), anyLong(), anyString(), anyInt(), anyLong());
+    }
+
+    @Test
+    void requireCompleteConfig_refuses_a_never_configured_executor() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI", null, null));
+
+        // 未配置就是未配置：不回填系统默认值，也不去读浏览器偏好
+        BizException ex = assertThrows(BizException.class, () -> service.requireCompleteConfig(9L, TENANT));
+        assertEquals("17007", ex.getCode());
+    }
+
+    @Test
+    void requireCompleteConfig_refuses_a_partially_saved_config() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI",
+                "{\"model\":\"qmodel_38max\",\"memoryMode\":\"platform\"}", 2));
+
+        BizException ex = assertThrows(BizException.class, () -> service.requireCompleteConfig(9L, TENANT));
+        assertEquals("17007", ex.getCode());
+    }
+
+    @Test
+    void requireCompleteConfig_refuses_a_config_without_memory_mode() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI",
+                "{\"model\":\"qmodel_38max\",\"reasoningEffort\":\"low\",\"contextWindow\":\"400000\"}", 2));
+
+        BizException ex = assertThrows(BizException.class, () -> service.requireCompleteConfig(9L, TENANT));
+        assertEquals("17007", ex.getCode());
+    }
+
+    @Test
+    void requireCompleteConfig_names_the_rotated_out_model_it_refuses() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI",
+                "{\"model\":\"removed-model\",\"reasoningEffort\":\"low\",\"contextWindow\":\"400000\","
+                        + "\"memoryMode\":\"none\"}", 3));
+
+        BizException ex = assertThrows(BizException.class, () -> service.requireCompleteConfig(9L, TENANT));
+        assertEquals("17006", ex.getCode());
+        assertTrue(ex.getMessage().contains("removed-model"));
+        verify(executorDao, never()).updateLaunchConfig(anyLong(), anyLong(), anyString(), anyInt(), anyLong());
+    }
+
+    @Test
+    void requireCompleteConfig_accepts_a_non_qoder_executor_that_only_needs_memory_mode() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "CLAUDE_CODE",
+                "{\"memoryMode\":\"provider-local\"}", 2));
+
+        ExecutorLaunchConfigService.LaunchConfig config = service.requireCompleteConfig(9L, TENANT);
+
+        assertEquals("provider-local", config.memoryMode);
+        assertNull(config.model);
+    }
+
+    @Test
+    void requireCompleteConfig_throws_not_found_for_a_deleted_executor() {
+        when(executorDao.findById(9L)).thenReturn(null);
+
+        BizException ex = assertThrows(BizException.class, () -> service.requireCompleteConfig(9L, TENANT));
+        assertEquals("17001", ex.getCode());
+    }
+
+    @Test
+    void requireCompleteConfig_throws_not_found_on_tenant_mismatch() {
+        when(executorDao.findById(9L)).thenReturn(executor(9L, "QODER_CLI",
+                "{\"model\":\"qmodel_38max\",\"reasoningEffort\":\"low\",\"contextWindow\":\"400000\","
+                        + "\"memoryMode\":\"none\"}", 1));
+
+        BizException ex = assertThrows(BizException.class, () -> service.requireCompleteConfig(9L, 999L));
+        assertEquals("17001", ex.getCode());
+    }
+
+    @Test void upgradePolicyIsManagedForNonQoderAndOldWritesPreserveIt() {
+        ExecutorDO e = executor(1, "CLAUDE_CODE", "{\"memoryMode\":\"platform\",\"modelUpgradePolicy\":{\"enabled\":true,\"levels\":[{\"entryCount\":3,\"model\":\"opus\"}]}}", 1);
+        when(executorDao.findById(1L)).thenReturn(e);
+        when(executorDao.updateLaunchConfig(anyLong(), anyLong(), anyString(), anyInt(), anyLong())).thenReturn(1);
+        assertEquals(3, service.readStoredConfig(1, TENANT).getModelUpgradePolicy().getLevels().get(0).getEntryCount());
+        UpdateExecutorLaunchConfigRequest request = new UpdateExecutorLaunchConfigRequest(); request.setVersion(1);
+        assertTrue(service.updateConfig(1, TENANT, request, USER).getModelUpgradePolicy().isEnabled());
+        ModelUpgradePolicy policy = new ModelUpgradePolicy(); policy.setEnabled(true);
+        ModelUpgradePolicy.Level level = new ModelUpgradePolicy.Level(); level.setEntryCount(1); level.setModel("opus");
+        policy.setLevels(java.util.List.of(level)); request.setModelUpgradePolicy(policy);
+        assertThrows(BizException.class, () -> service.updateConfig(1,TENANT,request,USER));
+        level.setEntryCount(2);
+        assertEquals("opus", service.updateConfig(1,TENANT,request,USER).getModelUpgradePolicy().getLevels().get(0).getModel());
+        policy.setEnabled(false); policy.setLevels(java.util.List.of());
+        assertFalse(service.updateConfig(1,TENANT,request,USER).getModelUpgradePolicy().isEnabled());
+    }
+
+    @Test void fractionalEntryThresholdsAreRejectedAtJsonBoundary() {
+        assertThrows(com.fasterxml.jackson.core.JsonProcessingException.class, () ->
+                new com.fasterxml.jackson.databind.ObjectMapper().readValue(
+                        "{\"enabled\":true,\"levels\":[{\"entryCount\":2.5,\"model\":\"best\"}]}", ModelUpgradePolicy.class));
+    }
+
+    @Test void policyOnlyUpdatePreservesStartupFieldsAndDoesNotRepairRetiredDefaultModel() {
+        ExecutorDO e = executor(1, "QODER_CLI", "{\"model\":\"retired-default\",\"memoryMode\":\"none\",\"reasoningEffort\":\"high\",\"contextWindow\":\"400000\",\"maxConcurrentDispatches\":8}", 7);
+        when(executorDao.findById(1L)).thenReturn(e);
+        when(executorDao.updateLaunchConfig(anyLong(), anyLong(), anyString(), anyInt(), anyLong())).thenReturn(1);
+        UpdateExecutorLaunchConfigRequest req = new UpdateExecutorLaunchConfigRequest(); req.setVersion(7);
+        ModelUpgradePolicy policy = new ModelUpgradePolicy(); policy.setEnabled(false);
+        ModelUpgradePolicy.Level level = new ModelUpgradePolicy.Level(); level.setEntryCount(2); level.setModel("retired-upgrade");
+        policy.setLevels(java.util.List.of(level)); req.setModelUpgradePolicy(policy);
+        var result = service.updateModelUpgradePolicy(1,TENANT,req,USER);
+        assertEquals("retired-default",result.getModel()); assertEquals("none",result.getMemoryMode());
+        assertEquals("high",result.getReasoningEffort()); assertEquals("400000",result.getContextWindow());
+        assertEquals(8,result.getMaxConcurrentDispatches()); assertEquals(8,result.getVersion());
+        when(executorDao.updateLaunchConfig(anyLong(), anyLong(), anyString(), anyInt(), anyLong())).thenReturn(0);
+        assertThrows(BizException.class, () -> service.updateModelUpgradePolicy(1,TENANT,req,USER));
+    }
+
+    @Test void policyOnlyWritePreservesUnknownFieldsAndDoesNotPersistLegacyDefaults() throws Exception {
+        when(executorDao.findById(1L)).thenReturn(executor(1,"CLAUDE_CODE","{\"memoryMode\":\"platform\",\"customFlag\":\"keep\"}",1));
+        when(executorDao.updateLaunchConfig(anyLong(),anyLong(),anyString(),anyInt(),anyLong())).thenReturn(1);
+        var request = new UpdateExecutorLaunchConfigRequest(); request.setVersion(1);
+        var policy = new ModelUpgradePolicy(); policy.setEnabled(false); policy.setLevels(java.util.List.of()); request.setModelUpgradePolicy(policy);
+        service.updateModelUpgradePolicy(1,TENANT,request,USER);
+        var json = ArgumentCaptor.forClass(String.class);
+        verify(executorDao).updateLaunchConfig(eq(1L),eq(TENANT),json.capture(),eq(1),eq(USER));
+        var root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(json.getValue());
+        assertEquals("keep",root.path("customFlag").asText()); assertFalse(root.has("maxConcurrentDispatches"));
+        assertFalse(root.has("model"));
+    }
+}

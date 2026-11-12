@@ -1,0 +1,18 @@
+package com.ainative.workitem;
+
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class WorkitemEventTypeTest {
+
+    @Test
+    void keepsPersistedCodesAndPresentationLabelsCentralized() {
+        assertEquals("EXTERNAL_BUSINESS_OWNER_CHANGE", WorkitemEventType.EXTERNAL_BUSINESS_OWNER_CHANGE.code());
+        assertEquals("外部业务负责人已变更", WorkitemEventType.EXTERNAL_BUSINESS_OWNER_CHANGE.actionLabel());
+        assertEquals("TAG_CHANGE", WorkitemEventType.TAG_CHANGE.code());
+        assertEquals("工作项标签已更新", WorkitemEventType.TAG_CHANGE.actionLabel());
+        assertTrue(WorkitemEventType.fromCode("EXTERNAL_UPDATE").isPresent());
+    }
+}

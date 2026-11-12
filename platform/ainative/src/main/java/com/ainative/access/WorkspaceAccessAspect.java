@@ -1,0 +1,81 @@
+package com.ainative.access;
+
+import com.ainative.common.error.BizException;
+import com.ainative.common.error.ErrorCode;
+import com.ainative.context.RequestContext;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.Around;
+import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.aop.support.AopUtils;
+import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.core.annotation.Order;
+import org.springframework.stereotype.Component;
+
+import java.lang.reflect.Method;
+
+@Aspect
+@Component
+@Order(0)
+public class WorkspaceAccessAspect {
+
+    @Around("@within(com.ainative.access.RequireWorkspaceAccess) || "
+            + "@annotation(com.ainative.access.RequireWorkspaceAccess) || "
+            + "execution(@com.ainative.access.RequireWorkspaceAccess * *(..)) || "
+            + "execution(* (@com.ainative.access.RequireWorkspaceAccess *).*(..))")
+    public Object around(ProceedingJoinPoint joinPoint) throws Throwable {
+        RequireWorkspaceAccess requirement = resolveRequirement(joinPoint);
+        if (requirement == null) {
+            return joinPoint.proceed();
+        }
+        RequestContext context = RequestContext.get();
+        if (context.getUserId() == null) {
+            throw new BizException(ErrorCode.UNAUTHORIZED);
+        }
+        if (context.getCurrentWorkspaceId() == null || context.getWorkspaceAccessLevel() == null) {
+            throw new BizException(ErrorCode.WORKSPACE_NOT_MEMBER);
+        }
+
+        WorkspaceAccessLevel current = context.getWorkspaceAccessLevel();
+        if (!current.allows(requirement.value())) {
+            throw new WorkspaceAccessDeniedException(
+                    current, requirement.value(), requirement.action(), requirement.actionKey());
+        }
+        if (requirement.value() != WorkspaceAccessLevel.READ_ONLY
+                && current != WorkspaceAccessLevel.ADMIN && context.getWorkspaceMember() != null) {
+            Class<?> targetClass = AopUtils.getTargetClass(joinPoint.getTarget());
+            WorkspaceDomain readOnly = WorkspaceDomain.firstReadOnly(
+                    context.getWorkspaceMember().getReadOnlyDomains(), targetClass);
+            if (readOnly != null) {
+                throw new WorkspaceDomainReadOnlyException(
+                        readOnly, requirement.action(), requirement.actionKey());
+            }
+        }
+        return joinPoint.proceed();
+    }
+
+    private RequireWorkspaceAccess resolveRequirement(ProceedingJoinPoint joinPoint) {
+        Method signatureMethod = ((MethodSignature) joinPoint.getSignature()).getMethod();
+        Object target = joinPoint.getTarget();
+        Class<?> targetClass = target == null
+                ? signatureMethod.getDeclaringClass()
+                : AopUtils.getTargetClass(target);
+        Method concreteMethod = AopUtils.getMostSpecificMethod(signatureMethod, targetClass);
+
+        RequireWorkspaceAccess requirement = AnnotatedElementUtils.findMergedAnnotation(
+                concreteMethod, RequireWorkspaceAccess.class);
+        if (requirement == null) {
+            requirement = AnnotatedElementUtils.findMergedAnnotation(
+                    signatureMethod, RequireWorkspaceAccess.class);
+        }
+        if (requirement == null) {
+            requirement = AnnotatedElementUtils.findMergedAnnotation(
+                    targetClass, RequireWorkspaceAccess.class);
+        }
+        if (requirement == null) {
+            requirement = AnnotatedElementUtils.findMergedAnnotation(
+                    signatureMethod.getDeclaringClass(), RequireWorkspaceAccess.class);
+        }
+        return requirement;
+    }
+}

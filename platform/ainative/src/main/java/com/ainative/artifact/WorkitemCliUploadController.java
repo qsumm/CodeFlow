@@ -1,0 +1,107 @@
+package com.ainative.artifact;
+
+import com.ainative.access.WorkspaceDomain;
+import com.ainative.artifact.dto.ArtifactVO;
+import com.ainative.common.error.BizException;
+import com.ainative.common.error.ErrorCode;
+import com.ainative.common.result.Result;
+import com.ainative.mcp.WorkitemCliUploadTokenService;
+import com.ainative.workitem.WorkitemDO;
+import com.ainative.workitem.WorkitemDao;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.util.List;
+
+/**
+ * Upload-only endpoint for the {@code ainative workitem upload} CLI command.
+ * Bypassed by the session AuthFilter (exact POST path only); authentication uses
+ * the scoped ainativeupload_ token and every request re-checks live write membership.
+ */
+@RestController
+@RequestMapping("/api/cli")
+public class WorkitemCliUploadController {
+
+    private final WorkitemCliUploadTokenService tokenService;
+    private final WorkitemDao workitemDao;
+    private final RequirementDocumentService requirementDocumentService;
+
+    public WorkitemCliUploadController(WorkitemCliUploadTokenService tokenService,
+                                       WorkitemDao workitemDao,
+                                       RequirementDocumentService requirementDocumentService) {
+        this.tokenService = tokenService;
+        this.workitemDao = workitemDao;
+        this.requirementDocumentService = requirementDocumentService;
+    }
+
+    @PostMapping(value = "/workitems/{workitemId}/requirement-documents",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Result<List<ArtifactVO>>> upload(
+            @PathVariable("workitemId") long workitemId,
+            @RequestParam("files") MultipartFile[] files,
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        com.ainative.mcp.McpAccessTokenService.Principal principal = null;
+        try {
+            principal = authenticate(authorization, workitemId);
+            long userId = principal.userId();
+            WorkitemDO workitem = workitemDao.findById(workitemId);
+            if (workitem == null || workitem.getTenantId() == null) {
+                throw new BizException(ErrorCode.WORKITEM_NOT_FOUND);
+            }
+            tokenService.requireWriteMembership(workitem.getTenantId(), userId, WorkspaceDomain.ARTIFACT);
+            var result = requirementDocumentService.uploadCli(workitemId, files, workitem.getTenantId(), userId);
+            tokenService.auditUse(principal, workitemId, "CLI_UPLOAD", null);
+            return ResponseEntity.ok(Result.ok(result));
+        } catch (BizException ex) {
+            tokenService.auditUse(principal, workitemId, "CLI_UPLOAD", ex);
+            return ResponseEntity.status(statusFor(ex.getCode()))
+                    .body(Result.fail(ex));
+        } catch (IOException ex) {
+            tokenService.auditUse(principal, workitemId, "CLI_UPLOAD", ex);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.fail(ErrorCode.PARAM_INVALID));
+        } catch (RuntimeException ex) {
+            tokenService.auditUse(principal, workitemId, "CLI_UPLOAD", ex);
+            throw ex;
+        }
+    }
+
+    private com.ainative.mcp.McpAccessTokenService.Principal authenticate(String authorization, long workitemId) {
+        String scheme = "Bearer ";
+        if (authorization == null || authorization.length() < scheme.length()
+                || !authorization.regionMatches(true, 0, scheme, 0, scheme.length())) {
+            throw new BizException(ErrorCode.UNAUTHORIZED);
+        }
+        return tokenService.authenticateForWorkitem(authorization.substring(scheme.length()).trim(), workitemId);
+    }
+
+    private HttpStatus statusFor(String code) {
+        if (ErrorCode.UNAUTHORIZED.getCode().equals(code)) {
+            return HttpStatus.UNAUTHORIZED;
+        }
+        if (ErrorCode.NO_PERMISSION.getCode().equals(code)
+                || ErrorCode.WORKSPACE_NOT_MEMBER.getCode().equals(code)) {
+            return HttpStatus.FORBIDDEN;
+        }
+        if (ErrorCode.WORKITEM_NOT_FOUND.getCode().equals(code)
+                || ErrorCode.ARTIFACT_NOT_FOUND.getCode().equals(code)) {
+            return HttpStatus.NOT_FOUND;
+        }
+        if (ErrorCode.CONFLICT.getCode().equals(code)) {
+            return HttpStatus.CONFLICT;
+        }
+        if (ErrorCode.PARAM_INVALID.getCode().equals(code)) {
+            return HttpStatus.BAD_REQUEST;
+        }
+        return HttpStatus.INTERNAL_SERVER_ERROR;
+    }
+}

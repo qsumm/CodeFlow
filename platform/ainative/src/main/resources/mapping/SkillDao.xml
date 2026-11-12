@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ainative.skill.SkillDao">
+    <insert id="insert" parameterType="com.ainative.skill.SkillDO"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO skill (tenant_id, type, name, install_spec, description, source_type,
+                           package_oss_ref, package_file_name, package_size, package_md5,
+                           creator_id, is_deleted, version)
+        VALUES (#{tenantId}, #{type}, #{name}, #{installSpec}, #{description}, #{sourceType},
+                #{packageOssRef}, #{packageFileName}, #{packageSize}, #{packageMd5},
+                #{creatorId}, 0, 0)
+    </insert>
+    <select id="findById" resultType="com.ainative.skill.SkillDO">
+        SELECT * FROM skill WHERE id = #{id} AND is_deleted = 0 LIMIT 1
+    </select>
+    <select id="findByIdForUpdate" resultType="com.ainative.skill.SkillDO">
+        SELECT * FROM skill WHERE id = #{id} AND is_deleted = 0 LIMIT 1 FOR UPDATE
+    </select>
+    <!-- 分类筛选与未分类筛选互斥（服务层校验），此处只负责拼接过滤条件；
+         categoryIds 由服务层按“是否包含子分类”展开为分类 id 列表 -->
+    <sql id="categoryFilter">
+        <if test="categoryIds != null">
+            AND EXISTS (
+                SELECT 1 FROM asset_category_ref r
+                WHERE r.tenant_id = #{tenantId} AND r.asset_type = 'SKILL'
+                  AND r.asset_id = skill.id AND r.is_deleted = 0
+                  AND r.category_id IN
+                <foreach collection="categoryIds" item="categoryId" open="(" separator="," close=")">
+                    #{categoryId}
+                </foreach>
+            )
+        </if>
+        <if test="uncategorized">
+            AND NOT EXISTS (
+                SELECT 1 FROM asset_category_ref r
+                WHERE r.tenant_id = #{tenantId} AND r.asset_type = 'SKILL'
+                  AND r.asset_id = skill.id AND r.is_deleted = 0
+            )
+        </if>
+    </sql>
+    <select id="list" resultType="com.ainative.skill.SkillDO">
+        SELECT * FROM skill
+        <where>
+            is_deleted = 0
+            AND tenant_id = #{tenantId}
+            <if test="type != null">AND type = #{type}</if>
+            <include refid="categoryFilter"/>
+        </where>
+        ORDER BY id DESC LIMIT #{offset}, #{limit}
+    </select>
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM skill
+        <where>
+            is_deleted = 0
+            AND tenant_id = #{tenantId}
+            <if test="type != null">AND type = #{type}</if>
+            <include refid="categoryFilter"/>
+        </where>
+    </select>
+    <update id="update">
+        UPDATE skill SET name = #{name}, type = #{type}, install_spec = #{installSpec},
+            description = #{description}, version = version + 1, modifier_id = #{modifierId}
+        WHERE id = #{id} AND tenant_id = #{tenantId} AND version = #{version} AND is_deleted = 0
+    </update>
+    <update id="updatePackage">
+        UPDATE skill SET name = #{name}, type = #{type}, description = #{description}, source_type = #{sourceType},
+            package_oss_ref = #{packageOssRef}, package_file_name = #{packageFileName},
+            package_size = #{packageSize}, package_md5 = #{packageMd5},
+            install_spec = #{installSpec},
+            version = version + 1, modifier_id = #{modifierId}
+        WHERE id = #{id} AND tenant_id = #{tenantId} AND version = #{version} AND is_deleted = 0
+    </update>
+    <!-- 软删除时把 name 置为墓碑值 '#deleted-<id>'，释放 uk_type_name 占用的名称，避免重新上传/创建同名 skill 唯一键冲突 -->
+    <update id="softDelete">
+        UPDATE skill SET is_deleted = 1, name = CONCAT('#deleted-', id), version = version + 1, modifier_id = #{modifierId}
+        WHERE id = #{id} AND tenant_id = #{tenantId} AND version = #{version} AND is_deleted = 0
+    </update>
+    <select id="findByTypeAndName" resultType="com.ainative.skill.SkillDO">
+        SELECT * FROM skill WHERE tenant_id = #{tenantId} AND type = #{type} AND name = #{name} AND is_deleted = 0 LIMIT 1
+    </select>
+    <!-- 软删除行可能仍占用 uk_type_name 名称槽位（历史数据未墓碑化、迁移未执行、旧实例写入），
+         写入同名前释放该槽位，避免 INSERT 撞唯一键被兜底成 409 数据冲突 -->
+    <update id="releaseSoftDeletedName">
+        UPDATE skill SET name = CONCAT('#deleted-', id)
+        WHERE tenant_id = #{tenantId} AND type = #{type} AND name = #{name} AND is_deleted = 1
+    </update>
+</mapper>

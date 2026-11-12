@@ -1,0 +1,442 @@
+/* CodeFlow 工作台视觉规范(设计契约 v5 / IDE 工作台语言)
+ * 规则:发丝边、控件 8px / 面板 10px / 弹窗 12px 圆角、平面化按钮(无渐变无内阴影)、
+ * 徽章 6px 方chip、表头左对齐、状态点为方形、等宽数字、焦点环。
+ * 加载顺序在 crystal.css 之后。 */
+
+:root {
+  /* 圆角收口为三档(2026-11-11 视觉评审:此前 0/6/8/10/12 五档并存,像每个组件自己长):
+     控件 6 / 卡片 8 / 大容器 12。--cf-radius-lg 作为卡片档的别名保留,避免旧引用断裂。 */
+  --cf-radius-sm: 6px;
+  --cf-radius: 8px;
+  --cf-radius-lg: 8px;
+  --cf-radius-xl: 12px;
+  --cf-hairline: var(--cf-border);
+  --cf-shadow-card: 0 1px 2px rgba(0, 0, 0, .12);
+  --cf-shadow-pop: 0 12px 32px rgba(0, 0, 0, .18);
+  --cf-mono: "SFMono-Regular", Consolas, "JetBrains Mono", ui-monospace, monospace;
+}
+
+html[data-appearance='dark'] {
+  --cf-shadow-card: 0 1px 2px rgba(0, 0, 0, .35);
+  --cf-shadow-pop: 0 16px 40px rgba(0, 0, 0, .55);
+}
+
+/* 卡片/面板:发丝边 + 10px 圆角 + 轻阴影 */
+.ant-card,
+.cf-content-card {
+  border: 1px solid var(--cf-border) !important;
+  border-radius: var(--cf-radius-lg) !important;
+  box-shadow: var(--cf-shadow-card) !important;
+  background: var(--cf-panel) !important;
+}
+
+/* 弹窗:12px */
+.ant-modal .ant-modal-content { border-radius: var(--cf-radius-xl) !important; }
+.ant-drawer .ant-drawer-content { border-radius: 0 !important; }
+
+/* 徽章:6px 方chip(不用胶囊) */
+.ant-tag {
+  border-radius: var(--cf-radius-sm) !important;
+  font-size: .71rem !important;
+  font-weight: 500 !important;
+  letter-spacing: .02em;
+  padding-inline: 8px !important;
+}
+
+/* 控件:8px 圆角,紧凑高度 */
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-select-selector {
+  border-radius: var(--cf-radius) !important;
+}
+.ant-input:not(textarea),
+.ant-input-affix-wrapper .ant-input:not(textarea) {
+  min-height: 34px;
+}
+.ant-btn {
+  /* 控件档圆角 6px(卡片档 8px 留给容器),按钮不再各用各的圆角 */
+  border-radius: var(--cf-radius-sm) !important;
+  /* 高度交给主题令牌 controlHeight(34):这里硬编码 32 会让中号按钮比同排输入框矮一截 */
+  padding-inline: 13px !important;
+  font-weight: 500 !important;
+}
+/* 按钮三档(视觉评审:同屏出现填充/描边/幽灵/图标四套形态,像四种控件):
+   primary=实心 accent;secondary=白底 1px 中性描边;ghost=无边框、hover 才显底。
+   默认态中性,删除类危险操作也不默认染红(仅 hover 提示),避免与状态色抢注意力。 */
+.ant-btn-default,
+.ant-btn-dashed {
+  border-color: var(--cf-border) !important;
+  color: var(--cf-text) !important;
+  background: var(--cf-panel) !important;
+}
+.ant-btn-text,
+.ant-btn-link {
+  color: var(--cf-muted) !important;
+  box-shadow: none !important;
+}
+.ant-btn-text:hover,
+.ant-btn-link:hover {
+  color: var(--cf-accent-text) !important;
+  background: rgba(var(--cf-accent-rgb), .08) !important;
+}
+.ant-btn-dangerous:not(.ant-btn-primary):not(.ant-btn-text):not(.ant-btn-link) {
+  color: var(--cf-muted) !important;
+  border-color: var(--cf-border) !important;
+}
+.ant-btn-dangerous:not(.ant-btn-primary):not(.ant-btn-text):not(.ant-btn-link):hover {
+  color: var(--cf-error) !important;
+  border-color: var(--cf-error) !important;
+}
+.ant-btn-sm {
+  height: 28px !important;
+  padding-inline: 10px !important;
+}
+.ant-checkbox-inner, .ant-radio-inner { border-radius: 4px !important; }
+
+/* 表格:小号大写表头 + 发丝分隔;悬浮行 accent 左缘标记(替代斑马纹)。
+ * 对齐不在此处强制:表头跟随 ThemedTable 的列声明(默认居中、显式 align 跟随),
+ * 否则 !important 左对齐会压过组件契约,造成「表头左、单元格中」的头尾错位。 */
+.ant-table-thead > tr > th {
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: .71rem !important;
+  font-weight: 500 !important;
+  color: var(--cf-muted) !important;
+  background: var(--cf-sunken, var(--cf-raised)) !important;
+  border-bottom: 1px solid var(--cf-border) !important;
+}
+.ant-table-tbody > tr > td {
+  border-bottom: 1px solid var(--cf-border) !important;
+}
+.ant-table-tbody > tr > td:first-child { position: relative; }
+.ant-table-tbody > tr:hover > td:first-child::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+  background: var(--cf-accent);
+}
+.ant-table-tbody > tr > td { transition: background .12s ease; }
+
+/* 焦点环:3px accent 软光晕 */
+.ant-btn:focus-visible,
+.ant-input:focus-visible,
+.ant-select-selector:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 0 !important;
+  box-shadow: 0 0 0 3px rgba(var(--cf-accent-rgb), .16) !important;
+}
+
+/* 滚动条 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(125, 135, 152, .45) transparent;
+}
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(125, 135, 152, .45);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(125, 135, 152, .7);
+  background-clip: content-box;
+}
+
+/* 工单流(单列卡片) */
+.flow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.flow-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius);
+  background: var(--cf-panel);
+  cursor: pointer;
+  transition: border-color .14s cubic-bezier(.2, .7, .3, 1), background .14s cubic-bezier(.2, .7, .3, 1);
+}
+.flow-item:hover {
+  border-color: rgba(var(--cf-accent-rgb), .45);
+  background: var(--cf-raised);
+}
+.flow-item--active {
+  border-color: rgba(var(--cf-accent-rgb), .35);
+  background: rgba(var(--cf-accent-rgb), .08);
+}
+.flow-item__title {
+  font-size: .86rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.flow-item__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: .74rem;
+  color: var(--cf-muted);
+}
+.flow-item__id {
+  font-family: var(--cf-mono);
+  font-variant-numeric: tabular-nums;
+}
+.flow-item__time {
+  margin-left: auto;
+  font-family: var(--cf-mono);
+}
+
+/* 详情:单行指标条 */
+.cf-workitem-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0;
+  margin-top: 14px;
+  padding: 0;
+  border-bottom: 0;
+}
+.cf-workitem-meta > span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 22px 0 0;
+  margin-right: 22px;
+  border-right: 1px solid var(--cf-border);
+  overflow-wrap: anywhere;
+}
+.cf-workitem-meta > span:last-child {
+  border-right: 0;
+  margin-right: 0;
+  padding-right: 0;
+}
+.cf-workitem-meta > span > span:first-child {
+  font-size: .7rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--cf-muted);
+}
+.cf-workitem-meta > span .ant-tag {
+  margin: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 22px;
+}
+
+/* 步骤时间线(方形节点) */
+.step-timeline {
+  display: flex;
+  flex-direction: column;
+}
+.step-timeline__row {
+  display: flex;
+  gap: 12px;
+  padding: 9px 0;
+  position: relative;
+}
+.step-timeline__line {
+  position: absolute;
+  left: 5px;
+  top: 21px;
+  bottom: -9px;
+  width: 1px;
+  background: var(--cf-border);
+}
+.step-timeline__row:last-child .step-timeline__line {
+  display: none;
+}
+.step-timeline__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--cf-muted);
+  margin-top: 5px;
+  flex: 0 0 auto;
+  z-index: 1;
+}
+.step-timeline__dot--done {
+  background: var(--cf-success);
+  box-shadow: 0 0 0 3px rgba(var(--cf-accent-rgb), .08);
+}
+.step-timeline__dot--run {
+  background: var(--cf-accent);
+  box-shadow: 0 0 0 3px rgba(var(--cf-accent-rgb), .2);
+}
+.step-timeline__name {
+  font-size: .86rem;
+  font-weight: 600;
+}
+.step-timeline__time {
+  font-family: var(--cf-mono);
+  font-size: .74rem;
+  color: var(--cf-muted);
+  margin-top: 3px;
+}
+
+/* ── 顶栏右侧操作组(helpCenter 变体沿用) ── */
+.cf-page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cf-page-header-actions > * { flex-shrink: 0; }
+.cf-page-header-actions .ant-btn-icon-only {
+  width: 30px; height: 30px; border-radius: var(--cf-radius);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+/* 用户头像:平面方chip(去渐变/去光晕/去圆环) */
+.cf-user-avatar {
+  background: var(--cf-accent) !important;
+  border: none !important;
+  border-radius: var(--cf-radius) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+  transition: none;
+}
+.cf-user-avatar:hover {
+  filter: brightness(1.08);
+  transform: none;
+  box-shadow: none !important;
+}
+
+/* ── AI 管家入口(puck):平面 accent 方钮 ── */
+.cf-chief .cf-chief-puck, button.cf-chief-puck {
+  width: 42px !important; height: 42px !important;
+  border: 1px solid rgba(var(--cf-accent-rgb), .45) !important;
+  background: var(--cf-panel) !important;
+  color: var(--cf-accent-text) !important;
+  border-radius: var(--cf-radius) !important;
+  box-shadow: none !important;
+  transition: border-color .15s ease, color .15s ease;
+}
+.cf-chief .cf-chief-puck:hover, button.cf-chief-puck:hover {
+  border-color: var(--cf-accent) !important;
+  background: rgba(var(--cf-accent-rgb), .10) !important;
+  transform: none;
+  box-shadow: none !important;
+  filter: none;
+}
+button.cf-chief-puck:active { cursor: grabbing; }
+@media (prefers-reduced-motion: reduce) {
+  .cf-chief-puck, .cf-chief-puck:hover { transition: none; transform: none; }
+}
+
+/* ── 工单流:日期分组(方形状态点) ── */
+.flow-group { margin-bottom: 6px; }
+.flow-group__label {
+  font-size: .72rem;
+  font-weight: 650;
+  letter-spacing: .04em;
+  color: var(--cf-muted);
+  padding: 8px 2px 6px;
+  font-family: var(--cf-mono);
+}
+.flow-item__dot {
+  width: 8px; height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  background: var(--cf-muted, #8a94a4);
+}
+.flow-item__dot[data-tone='done'] { background: var(--cf-success, #57c98b); }
+.flow-item__dot[data-tone='fail'] { background: #e5484d; }
+.flow-item__dot[data-tone='wait'] { background: #f5b83d; }
+.flow-item__dot[data-tone='run'] { background: var(--cf-accent, #2383e2); }
+
+/* ── 运行器页:标题行状态带(方形状态点) ── */
+.exec-status-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: 18px;
+  font-size: .8rem;
+  color: var(--cf-muted);
+}
+.exec-status-strip__item { display: inline-flex; align-items: center; gap: 6px; }
+.exec-status-strip__item i {
+  width: 7px; height: 7px; border-radius: 2px;
+  display: inline-block;
+}
+.exec-status-strip__item i[data-tone='online'] { background: var(--cf-success, #57c98b); }
+.exec-status-strip__item i[data-tone='busy'] { background: var(--cf-warning, #f5b83d); }
+.exec-status-strip__item i[data-tone='offline'] { background: var(--cf-muted, #8a94a4); opacity: .7; }
+
+/* ── 工单详情:元信息横幅条 ── */
+.wi-meta-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  padding: 10px 14px;
+  background: var(--cf-panel);
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius);
+}
+.wi-meta-cell { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.wi-meta-label {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .05em;
+  color: var(--cf-muted);
+  text-transform: uppercase;
+}
+
+/* ── 自定义背景(2026-11-10):用户上传图片铺满视口,遮罩保证前景可读 ──
+ * 遮罩色跟随明暗模式(--cf-bg-overlay 由 AppearanceProvider 写入),
+ * 浓度 0-90 由用户调节;面板/侧栏仍是实色,只有缝隙透出背景。 */
+body.cf-custom-bg {
+  background-image: linear-gradient(var(--cf-bg-overlay), var(--cf-bg-overlay)), var(--cf-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+/* ── 主题工作台面板 ── */
+.theme-studio { width: 268px; display: flex; flex-direction: column; gap: 10px; }
+.theme-studio__sec { font-size: 12px; font-weight: 600; color: var(--cf-muted); }
+.theme-studio__swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.theme-studio__swatch {
+  position: relative;
+  width: 38px; height: 38px;
+  border-radius: 8px;
+  border: 2px solid var(--cf-border);
+  cursor: pointer;
+  padding: 0;
+  display: grid; place-items: center;
+  transition: transform .15s ease, border-color .15s ease;
+}
+.theme-studio__swatch:hover { transform: translateY(-2px); }
+.theme-studio__swatch.on { border-color: var(--cf-text); box-shadow: 0 0 0 2px var(--cf-panel), 0 0 0 4px var(--cf-border); }
+.theme-studio__swatch.on .theme-studio__check { color: #fff; font-size: 13px; filter: drop-shadow(0 0 2px rgba(0,0,0,.7)); }
+.theme-studio__row { display: flex; align-items: center; gap: 8px; }
+.theme-studio__hex { font-family: var(--cf-mono, monospace); font-size: 12px; color: var(--cf-muted); }
+.theme-studio__preview { border-radius: 8px; overflow: hidden; border: 1px solid var(--cf-border); }
+.theme-studio__preview img { display: block; width: 100%; height: 88px; object-fit: cover; }
+.theme-studio__hint { margin: 0; font-size: 12px; }
+.theme-studio__tint { display: flex; align-items: center; gap: 8px; }
+.theme-studio__tint .ant-slider { flex: 1; margin: 0; }
+.theme-studio__tintLabel, .theme-studio__tintValue { font-size: 12px; white-space: nowrap; }
+.theme-studio__note { margin: 0; font-size: 11px; }
+
+/* 自定义背景时,工作台壳层让出背景(body 才是画布) */
+body.cf-custom-bg .wb-shell,
+body.cf-custom-bg .cf-shell {
+  background: transparent;
+}
+
+/* main 的背景在 AppLayout 内联按 background 有无条件应用(CSS 盖不过内联) */

@@ -1,0 +1,304 @@
+/* ── 关于平台 · 「交付 9 号线」地铁图(2026-11-12 重设计) ──
+ * 页面壳(about-an-*)保持单一白画布;生命周期可视化是一张带边框的
+ * 「线路图海报」:SVG 画轨道/列车/站环,HTML <ol> 覆盖层放站名牌(可读)。
+ * 轨道 path 的 d 值在 AboutPlatformPage.tsx(MAIN_LINE_D),九站坐标 STOPS。 */
+
+.about-an-page {
+  height: auto;
+  min-height: calc(100dvh - 44px - 30px - 24px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 4px 0 0;
+  color: var(--cf-text);
+  background: var(--cf-panel);
+}
+/* 内容区框架在关于页撑满,白画布才能铺到内容区底部(其它页透明不受影响) */
+.cf-content-frame:has(.about-an-page) {
+  min-height: 100%;
+}
+
+/* 页头:普通标题行(单一材质,不做墨色横幅) */
+main .about-an-page > .cf-page-heading:not(.ant-card-head-title .cf-page-heading) {
+  background: transparent;
+  border: 0;
+  border-left: 0;
+  border-bottom: 1px solid var(--cf-border);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 12px 8px 14px;
+  margin-bottom: 14px;
+}
+/* 眉标:小号宽字距,与地铁海报的编辑排版同语言 */
+.about-an-heading-eyebrow {
+  display: block;
+  margin: 0 0 5px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .34em;
+  color: var(--cf-muted);
+}
+main .about-an-page > .cf-page-heading:not(.ant-card-head-title .cf-page-heading) h1,
+main .about-an-page > .cf-page-heading:not(.ant-card-head-title .cf-page-heading) .cf-page-heading-copy > h1 {
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: .02em;
+}
+
+.about-an-header {
+  flex-shrink: 0;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.about-an-eyebrow {
+  margin: 0;
+  color: var(--cf-muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+.about-an-intro {
+  margin: 0;
+  font-size: clamp(20px, 2vw, 28px);
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: .01em;
+}
+
+/* ── 线路图海报 ── */
+.aam {
+  --aam-line: var(--cf-accent-text);   /* 主线路:随主题强调色 */
+  --aam-loop: #d9730d;                 /* 回流虚线:固定橙(地铁导向标识语言) */
+  position: relative;
+  flex-shrink: 0;
+  width: min(1060px, 94vw);
+  margin: 12px auto 0;
+  padding: 22px 28px 14px;
+  border: 1px solid var(--cf-border);
+  border-radius: 18px;
+  background: var(--cf-panel);
+  box-shadow: 0 10px 30px rgba(16, 24, 40, .05);
+}
+
+/* 票头:线路徽章 + 线名 + 列车状态 */
+.aam-hd {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+}
+.aam-badge {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--aam-line);
+  color: #fff;
+  font-size: 19px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.aam-hd-copy { min-width: 0; }
+.aam-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  line-height: 1.2;
+}
+.aam-sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--cf-muted);
+}
+.aam-status {
+  margin-left: auto;
+  text-align: right;
+  font-size: 12px;
+  color: var(--cf-muted);
+}
+.aam-status-k { display: block; }
+.aam-status-v {
+  display: block;
+  margin-top: 2px;
+  color: var(--aam-line);
+  font-size: 15px;
+  font-weight: 700;
+}
+/* 阶段色调:已交付=绿,持续运营=青(与环上站语义对应) */
+.aam-status-v--done { color: var(--cf-ok, #57c98b); }
+.aam-status-v--ops { color: #0e9f8f; }
+
+/* 图例 */
+.aam-legend {
+  display: flex;
+  justify-content: flex-end;
+  gap: 18px;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--cf-muted);
+}
+.aam-lg {
+  display: inline-block;
+  width: 26px;
+  height: 0;
+  vertical-align: middle;
+  margin-right: 6px;
+  border-top: 4px solid var(--aam-line);
+  border-radius: 99px;
+}
+.aam-lg--loop {
+  border-top-style: dashed;
+  border-top-color: var(--aam-loop);
+}
+
+/* 地图:SVG 轨道 + HTML 站名牌覆盖层(同一坐标系按百分比换算) */
+.aam-map { margin-top: 2px; }
+.aam-canvas { position: relative; }
+.aam-lines {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.aam-main {
+  fill: none;
+  stroke: var(--aam-line);
+  stroke-width: 9;
+  stroke-linecap: round;
+}
+.aam-loop {
+  fill: none;
+  stroke: var(--aam-loop);
+  stroke-width: 4.5;
+  stroke-dasharray: 10 9;
+  stroke-linecap: round;
+}
+.aam-loop-arrow {
+  fill: none;
+  stroke: var(--aam-loop);
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.aam-loop-label {
+  font-size: 11px;
+  letter-spacing: 2px;
+  fill: var(--aam-loop);
+}
+.aam-first {
+  font-size: 11px;
+  letter-spacing: 2px;
+  fill: var(--aam-line);
+}
+.aam-ring {
+  fill: var(--cf-panel);
+  stroke: var(--aam-line);
+  stroke-width: 5;
+  transition: fill .35s;
+}
+.aam-ring--done { fill: var(--aam-line); }
+.aam-train-body {
+  fill: var(--aam-line);
+  stroke: var(--cf-panel);
+  stroke-width: 2;
+}
+.aam-train-light { fill: #ffd34d; }
+@media (prefers-reduced-motion: reduce) {
+  .aam-train { display: none; }
+}
+
+/* 站名牌(HTML,可选中/可读屏):站环上方或下方 16px 处 */
+.aam-stops {
+  position: absolute;
+  inset: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+}
+.aam-stop {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: nowrap;
+}
+.aam-stop--top { transform: translate(-50%, calc(-100% - 18px)); }
+.aam-stop--btm { transform: translate(-50%, 18px); }
+.aam-stop-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.aam-stop-no {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--aam-line);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  flex-shrink: 0;
+}
+.aam-stop-nm {
+  color: var(--cf-text);
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.aam-stop-ds {
+  margin-left: 24px;
+  color: var(--cf-muted);
+  font-size: 11px;
+}
+
+/* 票务行 */
+.aam-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cf-border);
+  font-size: 12px;
+  color: var(--cf-muted);
+}
+.aam-foot-train { display: inline-flex; align-items: baseline; }
+.aam-vv {
+  margin-left: 8px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-weight: 700;
+  color: var(--aam-line);
+}
+
+/* 「持续迭代」图注:页面底部独立一行居中 */
+.about-an-iteration {
+  display: inline-flex;
+  align-items: center;
+  margin: 14px auto 0;
+  padding: 2px 14px;
+  color: var(--cf-muted);
+  font-size: 11px;
+  letter-spacing: .12em;
+}
+
+/* 自定义背景开启时,关于页整面透出壁纸,海报保持自底色保证可读 */
+body.cf-custom-bg .about-an-page {
+  background: transparent;
+}
+
+/* ── 窄屏:横向滚动看图,票头信息收敛 ── */
+@media (max-width: 720px) {
+  .about-an-page { justify-content: flex-start; padding-top: 16px; }
+  .aam { padding: 16px 16px 10px; }
+  .aam-status, .aam-legend { display: none; }
+  .aam-title { font-size: 20px; }
+  .aam-map { overflow-x: auto; }
+  .aam-canvas { min-width: 760px; }
+  .aam-foot { flex-direction: column; gap: 4px; }
+}

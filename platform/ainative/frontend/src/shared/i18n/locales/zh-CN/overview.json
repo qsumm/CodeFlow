@@ -1,0 +1,122 @@
+{
+  "title": "项目总览",
+  "description": "新进了多少、交付了多少、还压着什么等你拍板。",
+  "toolbar": {
+    "rangeAria": "近期统计范围",
+    "lastWeek": "近一周",
+    "lastMonth": "近一个月",
+    "rangeSummary": "统计范围 {{start}} 至 {{end}}",
+    "timezone": "时区 {{timezone}}",
+    "dataThrough": "数据截至 {{date}}",
+    "refresh": "刷新",
+    "refreshAria": "刷新项目总览",
+    "loadFailure": "近期统计加载失败",
+    "retry": "重试"
+  },
+  "created": {
+    "title": "新增工作项",
+    "caption": "近 {{days}} 天，按日展示新增工作项数。",
+    "trendAria": "近 {{days}} 天每日新增工作项趋势"
+  },
+  "delivered": {
+    "title": "已完成工作项",
+    "dailyAverage": "日均 {{value}} 单/天",
+    "change": "环比上期 {{value}}",
+    "noBase": "无可比基数",
+    "previous_other": "上期 {{start}} 至 {{end}}：已完成 {{count}} 个",
+    "method": "口径：按平台统一 DONE 分类统计所选范围内进入完成状态的工作项，取消不计入，同一工作项重复进入完成状态不重复计数；环比对比上一等长周期。统计按工作项完成时间。",
+    "methodAria": "已完成工作项统计口径"
+  },
+  "pending": {
+    "title": "当前用户待处理工作项",
+    "caption": "全部待处理",
+    "hint": "不受上方统计范围限制，包含所有未完成且分配给你的工作项。",
+    "workitem": "工作项",
+    "name": "标题",
+    "status": "状态",
+    "priority": "优先级",
+    "reason": "需处理原因",
+    "updatedAt": "最近更新",
+    "reasonAWAITING_DECISION": "待你决策",
+    "reasonAWAITING_HANDLING": "待你处理",
+    "reasonIN_PROGRESS": "进行中",
+    "reasonUnknown": "待处理",
+    "total_other": "共 {{count}} 条",
+    "loading": "加载中…",
+    "empty": "暂无待处理工作项",
+    "loadFailure": "待处理工作项加载失败",
+    "retry": "重试",
+    "emptyHint": "调整统计范围,或先处理手头的工作项"
+  },
+  "createdList": {
+    "title": "{{range}}新增工作项",
+    "caption": "所选统计范围",
+    "hint": "与上方「新增工作项」同口径：所选统计范围内创建的工作项（含已取消），列表条数等于统计卡数值。",
+    "workitem": "工作项",
+    "name": "标题",
+    "status": "状态",
+    "priority": "优先级",
+    "createdAt": "创建时间",
+    "total_other": "共 {{count}} 条",
+    "loading": "加载中…",
+    "empty": "所选范围内暂无新增工作项",
+    "loadFailure": "新增工作项列表加载失败",
+    "retry": "重试",
+    "emptyHint": "这段时间还没有新建工作项"
+  },
+  "leadTime": {
+    "title": "平均交付周期",
+    "value": "{{value}} 天",
+    "method": "区间内完成工作项从创建到完成事件的平均时长;上期为紧邻等长区间,上期无完成时无可比基数。",
+    "methodAria": "查看平均交付周期口径说明",
+    "noBase": "本期或上期无完成,暂无可比基数",
+    "caption": "从创建到完成的平均时长"
+  },
+  "inProgress": {
+    "title": "进行中工作项",
+    "caption": "截至查询时刻的未结快照(含待处理与待你处理),历史不可回溯故无环比"
+  },
+  "firstPass": {
+    "title": "一次通过率",
+    "method": "区间内 SUCCEEDED 调度中 attempt=0(未经重试)的占比;口径与「洞察」一致并限定正式交付调度。",
+    "methodAria": "查看一次通过率口径说明",
+    "noData": "区间内无成功调度",
+    "caption": "无需重试即成功的调度占比"
+  },
+  "failed": {
+    "title": "失败/超时调度",
+    "share": "占全部调度 {{value}}%",
+    "change": "环比 {{value}}",
+    "noBase": "上期无失败,暂无可比基数",
+    "previous": "上期 {{start}} ~ {{end}}:{{count}} 次"
+  },
+  "rework": {
+    "title": "返工率",
+    "method": "评审打回(评论返工)或失败重试(三段式幂等键 attempt≥2)的调度占比,口径与实时大盘返工统计一致。",
+    "methodAria": "查看返工率口径说明",
+    "noData": "区间内无调度",
+    "caption": "评审打回或重试的调度占比"
+  },
+  "tokens": {
+    "title": "Token 消耗",
+    "trendAria": "区间内每日 Token 消耗趋势",
+    "change": "环比 {{value}}",
+    "noBase": "上期无消耗,暂无可比基数",
+    "previous": "上期 {{start}} ~ {{end}}:{{count}}"
+  },
+  "failures": {
+    "title": "失败原因 TOP5",
+    "caption": "按次数",
+    "reason": "原因",
+    "count": "次数",
+    "share": "占比",
+    "lastTime": "最近发生",
+    "unknown": "未记录原因",
+    "empty": "区间内没有失败或超时调度",
+    "loading": "加载中…",
+    "loadFailure": "失败原因加载失败",
+    "retry": "重试",
+    "emptyHint": "区间内所有调度都成功结束"
+  },
+  "separator": "·"
+}

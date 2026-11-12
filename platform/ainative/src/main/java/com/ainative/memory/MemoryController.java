@@ -1,0 +1,112 @@
+package com.ainative.memory;
+
+import com.ainative.common.error.BizException;
+import com.ainative.common.error.ErrorCode;
+import com.ainative.common.result.Result;
+import com.ainative.context.RequestContext;
+import com.ainative.memory.dto.*;
+import com.ainative.access.WorkspaceAccessLevel;
+import com.ainative.access.RequireWorkspaceAccess;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/memories")
+@ConditionalOnProperty(name = "ainative.memory.legacy-api-enabled", havingValue = "true")
+@RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_ONLY, action = "查看记忆", actionKey = "access.action.view_memories")
+public class MemoryController {
+
+    private final MemoryService memoryService;
+
+    public MemoryController(MemoryService memoryService) {
+        this.memoryService = memoryService;
+    }
+
+    @PostMapping
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "创建记忆", actionKey = "access.action.create_a_memory")
+    public Result<MemoryVO> create(@RequestBody CreateMemoryRequest req) {
+        return Result.ok(memoryService.create(req, currentWorkspaceId(), currentUserId()));
+    }
+
+    @GetMapping
+    public Result<List<MemoryVO>> list(
+            @RequestParam(value = "scope", required = false) String scope,
+            @RequestParam(value = "ownerRef", required = false) Long ownerRef,
+            @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        return Result.ok(memoryService.list(currentWorkspaceId(), scope, ownerRef, type, status, page, size));
+    }
+
+    @GetMapping("/count")
+    public Result<Long> count(
+            @RequestParam(value = "scope", required = false) String scope,
+            @RequestParam(value = "ownerRef", required = false) Long ownerRef,
+            @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "status", required = false) String status) {
+        return Result.ok(memoryService.countList(currentWorkspaceId(), scope, ownerRef, type, status));
+    }
+
+    @GetMapping("/grouped")
+    public Result<List<MemoryGroupVO>> listGrouped(
+            @RequestParam(value = "scope", required = false) String scope,
+            @RequestParam(value = "ownerRef", required = false) Long ownerRef,
+            @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size) {
+        return Result.ok(memoryService.listGrouped(currentWorkspaceId(), scope, ownerRef, type, status, page, size));
+    }
+
+    @GetMapping("/grouped/count")
+    public Result<Long> countGrouped(
+            @RequestParam(value = "scope", required = false) String scope,
+            @RequestParam(value = "ownerRef", required = false) Long ownerRef,
+            @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "status", required = false) String status) {
+        return Result.ok(memoryService.countGroups(currentWorkspaceId(), scope, ownerRef, type, status));
+    }
+
+    @GetMapping("/{id}")
+    public Result<MemoryVO> get(@PathVariable("id") Long id) {
+        return Result.ok(memoryService.get(id));
+    }
+
+    @PutMapping("/{id}")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "更新记忆", actionKey = "access.action.update_a_memory")
+    public Result<MemoryVO> update(@PathVariable("id") Long id, @RequestBody UpdateMemoryRequest req) {
+        return Result.ok(memoryService.update(id, req, currentWorkspaceId(), currentUserId()));
+    }
+
+    @DeleteMapping("/{id}")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "删除记忆", actionKey = "access.action.delete_a_memory")
+    public Result<Void> delete(@PathVariable("id") Long id) {
+        memoryService.delete(id, currentWorkspaceId(), currentUserId());
+        return Result.ok(null);
+    }
+
+    @PostMapping("/from-artifact")
+    @RequireWorkspaceAccess(value = WorkspaceAccessLevel.READ_WRITE, action = "从产物导入记忆", actionKey = "access.action.import_memory_from_an_artifact")
+    public Result<MemoryVO> importFromArtifact(@RequestBody ImportFromArtifactRequest req) {
+        return Result.ok(memoryService.importFromArtifact(req, currentWorkspaceId(), currentUserId()));
+    }
+
+    private long currentUserId() {
+        Long uid = RequestContext.get().getUserId();
+        if (uid == null) {
+            throw new BizException(ErrorCode.UNAUTHORIZED);
+        }
+        return uid;
+    }
+
+    private long currentWorkspaceId() {
+        Long workspaceId = RequestContext.get().getCurrentWorkspaceId();
+        if (workspaceId == null) {
+            throw new BizException(ErrorCode.WORKSPACE_NOT_MEMBER);
+        }
+        return workspaceId;
+    }
+}

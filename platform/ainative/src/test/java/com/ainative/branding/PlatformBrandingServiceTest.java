@@ -1,0 +1,545 @@
+package com.ainative.branding;
+
+import com.ainative.branding.dto.UpdatePlatformBrandingRequest;
+import com.ainative.common.error.BizException;
+import com.ainative.storage.InMemoryObjectStorage;
+import com.ainative.storage.ObjectStorage;
+import com.ainative.storage.OssProperties;
+import com.ainative.storage.StoredObject;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mock.web.MockMultipartFile;
+import org.yaml.snakeyaml.Yaml;
+
+import java.io.InputStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Parameter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class PlatformBrandingServiceTest {
+
+    private static final String RECOMMENDED_VERSION_PLACEHOLDER =
+            "${ainative.runtime.recommended-version:";
+    private static final String YAML_RECOMMENDED_VERSION_PLACEHOLDER =
+            "${AINATIVE_RUNTIME_RECOMMENDED_VERSION:";
+    private static final String EXPECTED_RECOMMENDED_RUNTIME_VERSION = "0.3.32";
+
+    @Test
+    void uploadLogoSupportsAdditionalFormatsAndPreservesBytes() {
+        for (String type : new String[]{"image/svg+xml", "image/gif", "image/x-icon", "image/vnd.microsoft.icon", "image/avif"}) {
+            PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+            PlatformBrandingDO row = row("CodeFlow", "#f97316", null);
+            when(dao.findActive()).thenReturn(row);
+            when(dao.updateLogo(anyString(), anyString(), eq(100L))).thenAnswer(call -> {
+                row.setLogoOssRef(call.getArgument(0));
+                row.setLogoContentType(call.getArgument(1));
+                return 1;
+            });
+            PlatformBrandingService service = newService(dao, new InMemoryObjectStorage());
+            byte[] bytes = "<svg xmlns='http://www.w3.org/2000/svg'><defs><linearGradient id='g'><stop offset='0' stop-color='red'/></linearGradient></defs><path style='fill:url(#g);stroke:red' d='M0 0h10v10z'/></svg>".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            service.uploadLogo(100L, new MockMultipartFile("file", "logo", type, bytes));
+            assertArrayEquals(bytes, service.logoBytes());
+            assertEquals(type, service.logoContentType());
+        }
+    }
+
+    @Test
+    void uploadLogoRejectsUnsafeSvgBeforeStorage() {
+        String[] invalid = {
+            "<svg", "<html/>",
+            "<svg xmlns='http://www.w3.org/1999/xhtml'/>",
+            "<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink'><use xlink:href='javascript:alert(1)'/></svg>",
+            "<svg xmlns='http://www.w3.org/2000/svg'><path style='fill:u&#114;l(https://example.com/x)'/></svg>",
+            "<svg xmlns='http://www.w3.org/2000/svg'><style>@import url(https://example.com/x);</style></svg>",
+            "<svg xmlns='http://www.w3.org/2000/svg'><path style='fill:url(https://example.com/x)'/></svg>",
+            "<!DOCTYPE svg [<!ENTITY x SYSTEM 'file:///etc/passwd'>]><svg xmlns='http://www.w3.org/2000/svg'>&x;</svg>",
+            "<?xml-stylesheet href='https://example.com/x.css'?><svg xmlns='http://www.w3.org/2000/svg'/>",
+            "<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>",
+            "<svg xmlns='http://www.w3.org/2000/svg' onload='alert(1)'/>",
+            "<svg xmlns='http://www.w3.org/2000/svg'><foreignObject/></svg>",
+            "<svg xmlns='http://www.w3.org/2000/svg'><use href='https://example.com/x.svg#a'/></svg>",
+            "<svg xmlns='http://www.w3.org/2000/svg'><path fill='url(https://example.com/a)'/></svg>",
+            "<svg xmlns='http://www.w3.org/2000/svg'><animate attributeName='href' to='javascript:alert(1)'/></svg>"
+        };
+        ObjectStorage storage = mock(ObjectStorage.class);
+        PlatformBrandingService service = newService(mock(PlatformBrandingDao.class), storage);
+        for (String svg : invalid) {
+            assertThrows(BizException.class, () -> service.uploadLogo(100L,
+                    new MockMultipartFile("file", "logo.svg", "image/svg+xml", svg.getBytes(java.nio.charset.StandardCharsets.UTF_8))), svg);
+        }
+        verifyNoInteractions(storage);
+    }
+
+    @Test
+    void uploadLogoStillRejectsOversizedAndUnsupportedFiles() {
+        ObjectStorage storage = mock(ObjectStorage.class);
+        PlatformBrandingService service = newService(mock(PlatformBrandingDao.class), storage);
+        assertThrows(BizException.class, () -> service.uploadLogo(100L,
+                new MockMultipartFile("file", "logo.gif", "image/gif", new byte[512 * 1024 + 1])));
+        assertThrows(BizException.class, () -> service.uploadLogo(100L,
+                new MockMultipartFile("file", "logo.pdf", "application/pdf", new byte[]{1})));
+        verifyNoInteractions(storage);
+    }
+
+    @Test
+    void publicConfigFallsBackWhenDatabaseRowIsMissing() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        PlatformBrandingService service = newService(dao);
+
+        var config = service.publicConfig();
+
+        assertEquals("CodeFlow", config.getPlatformName());
+        assertEquals("/logo.svg", config.getLogoUrl());
+        assertEquals("#2383e2", config.getPrimaryColor()); // DEF-024:我方品牌默认(ocean-blue),偏离上游 #f97316
+        assertNull(config.getDomain());
+        assertEquals("https://daily.ainative.example.com/api/mcp", config.getMcpBaseUrl());
+        assertEquals("0.2.130", config.getRecommendedRuntimeVersion());
+        assertEquals("x.x.x", config.getDeploymentVersion());
+        assertFalse(config.isCommunityEdition());
+        assertFalse(config.isCanManage());
+    }
+
+    @Test
+    void recommendedRuntimeVersionConstructorDefaultIsPinned() {
+        assertEquals(EXPECTED_RECOMMENDED_RUNTIME_VERSION, constructorRecommendedRuntimeVersionDefault());
+    }
+
+    @Test
+    void applicationYmlRecommendedVersionDefaultIsPinnedAndMatchesConstructorDefault() throws Exception {
+        String yamlDefault = applicationYmlRecommendedVersionDefault();
+
+        assertEquals(EXPECTED_RECOMMENDED_RUNTIME_VERSION, yamlDefault);
+        assertEquals(constructorRecommendedRuntimeVersionDefault(), yamlDefault,
+                "application.yml 与 PlatformBrandingService @Value 的兜底版本必须一致，否则两处默认值会静默漂移");
+    }
+
+    @Test
+    void publicConfigExposesCommunityEditionFlagWhenEnabled() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        PlatformBrandingService service =
+                newService(dao, new InMemoryObjectStorage(), "x.x.x", true);
+
+        assertTrue(service.publicConfig().isCommunityEdition());
+        assertTrue(service.adminConfig(true).isCommunityEdition());
+    }
+
+    @Test
+    void rejectsMissingDeploymentPublicBaseUrl() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        OssProperties props = new OssProperties();
+
+        assertThrows(IllegalStateException.class,
+                () -> new PlatformBrandingService(dao, new InMemoryObjectStorage(), props, "", "0.2.130", "x.x.x", false));
+    }
+
+    @Test
+    void rejectsPublicBaseUrlWithQueryOrFragment() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        OssProperties props = new OssProperties();
+
+        assertThrows(IllegalStateException.class,
+                () -> new PlatformBrandingService(
+                        dao, new InMemoryObjectStorage(), props, "https://daily.example.com?x=1", "0.2.130", "x.x.x", false));
+        assertThrows(IllegalStateException.class,
+                () -> new PlatformBrandingService(
+                        dao, new InMemoryObjectStorage(), props, "https://daily.example.com#anchor", "0.2.130", "x.x.x", false));
+    }
+
+    @Test
+    void updateAppliesTheBrandingDomainToThePublicMcpEndpoint() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        when(dao.update(any())).thenReturn(1);
+        when(dao.findActive()).thenReturn(row(
+                "WonderHub", "#2563eb", "https://wonder.example.com"));
+        PlatformBrandingService service = newService(dao);
+
+        UpdatePlatformBrandingRequest request = new UpdatePlatformBrandingRequest();
+        request.setPlatformName("WonderHub");
+        request.setThemeKey("ocean-blue");
+        request.setPrimaryColor("#2563EB");
+        request.setDomain("https://wonder.example.com/");
+
+        var updated = service.update(100L, request);
+
+        assertEquals("WonderHub", updated.getPlatformName());
+        assertEquals("https://wonder.example.com/api/mcp", updated.getMcpBaseUrl());
+        verify(dao).update(argThat(config ->
+                "WonderHub".equals(config.getPlatformName())
+                        && "#2563eb".equals(config.getPrimaryColor())
+                        && "https://wonder.example.com".equals(config.getDomain())));
+    }
+
+    @Test
+    void publicMcpEndpointFollowsTheConfiguredBrandingDomain() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        when(dao.findActive()).thenReturn(row("WonderHub", "#2563eb", "https://wonder.example.com"));
+        PlatformBrandingService service = newService(dao);
+
+        assertEquals("https://wonder.example.com", service.effectivePublicBaseUrl());
+        assertEquals("https://wonder.example.com/api/mcp", service.effectiveMcpBaseUrl());
+        assertEquals("https://wonder.example.com/api/mcp", service.publicConfig().getMcpBaseUrl());
+        assertEquals("https://wonder.example.com/api/mcp", service.adminConfig(true).getMcpBaseUrl());
+    }
+
+    @Test
+    void effectiveBaseUrlFallsBackToTheDeploymentBaseUrlWhenDomainIsMissing() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        when(dao.findActive()).thenReturn(row("WonderHub", "#2563eb", null));
+        PlatformBrandingService service = newService(dao);
+
+        assertEquals("https://daily.ainative.example.com", service.effectivePublicBaseUrl());
+        assertEquals("https://daily.ainative.example.com/api/mcp", service.effectiveMcpBaseUrl());
+        assertEquals("https://daily.ainative.example.com/api/mcp", service.publicConfig().getMcpBaseUrl());
+    }
+
+    @Test
+    void effectiveBaseUrlFallsBackToTheDeploymentBaseUrlWhenDomainIsBlank() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        when(dao.findActive()).thenReturn(row("WonderHub", "#2563eb", "   "));
+        PlatformBrandingService service = newService(dao);
+
+        assertEquals("https://daily.ainative.example.com", service.effectivePublicBaseUrl());
+    }
+
+    @Test
+    void effectiveBaseUrlUsesDeploymentUrlForCommunityDefaultConfiguration() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        when(dao.findActive()).thenReturn(null);
+        PlatformBrandingService service = newService(dao);
+
+        assertEquals("https://daily.ainative.example.com", service.effectivePublicBaseUrl());
+        assertEquals("https://daily.ainative.example.com/api/mcp", service.publicConfig().getMcpBaseUrl());
+    }
+
+    @Test
+    void effectiveBaseUrlFollowsDomainChangesWithoutRestart() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        when(dao.findActive()).thenReturn(row("WonderHub", "#2563eb", "https://first.example.com"));
+        PlatformBrandingService service = newService(dao);
+        assertEquals("https://first.example.com/api/mcp", service.publicConfig().getMcpBaseUrl());
+
+        when(dao.findActive()).thenReturn(row("WonderHub", "#2563eb", "https://second.example.com"));
+        assertEquals("https://second.example.com/api/mcp", service.publicConfig().getMcpBaseUrl());
+
+        when(dao.findActive()).thenReturn(row("WonderHub", "#2563eb", null));
+        assertEquals("https://daily.ainative.example.com/api/mcp", service.publicConfig().getMcpBaseUrl());
+    }
+
+    @Test
+    void updateRejectsInvalidColor() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        PlatformBrandingService service = newService(dao);
+
+        UpdatePlatformBrandingRequest request = new UpdatePlatformBrandingRequest();
+        request.setPlatformName("WonderHub");
+        request.setThemeKey("ocean-blue");
+        request.setPrimaryColor("blue");
+
+        assertThrows(BizException.class, () -> service.update(100L, request));
+    }
+
+    @Test
+    void updateRejectsPlainHttpDomain() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        PlatformBrandingService service = newService(dao);
+
+        UpdatePlatformBrandingRequest request = new UpdatePlatformBrandingRequest();
+        request.setPlatformName("WonderHub");
+        request.setThemeKey("ocean-blue");
+        request.setPrimaryColor("#2563eb");
+        request.setDomain("http://wonder.example.com");
+        assertThrows(BizException.class, () -> service.update(100L, request));
+    }
+
+    @Test
+    void uploadLogoStoresSupportedImageAndPublishesLogoEndpoint() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        when(dao.updateLogo(anyString(), anyString(), eq(100L))).thenReturn(1);
+        PlatformBrandingDO withLogo = row("CodeFlow", "#f97316", null);
+        withLogo.setLogoOssRef("community-test/platform/branding/logo-1.png");
+        when(dao.findActive()).thenReturn(withLogo);
+        InMemoryObjectStorage storage = new InMemoryObjectStorage();
+        PlatformBrandingService service = newService(dao, storage);
+
+        MockMultipartFile file = new MockMultipartFile("file", "logo.png", "image/png", new byte[]{1, 2, 3});
+        var result = service.uploadLogo(100L, file);
+
+        assertTrue(result.getLogoUrl().startsWith("/api/platform/branding/logo"));
+        verify(dao).updateLogo(startsWith("community-test/platform/branding/logo-"), eq("image/png"), eq(100L));
+    }
+
+    @Test
+    void logoBytesReturnsNullWhenNoLogoConfigured() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        when(dao.findActive()).thenReturn(row("CodeFlow", "#f97316", null));
+        ObjectStorage storage = mock(ObjectStorage.class);
+        PlatformBrandingService service = newService(dao, storage);
+
+        assertNull(service.logoBytes());
+        verifyNoInteractions(storage);
+    }
+
+    @Test
+    void logoBytesCachesResultOnRepeatedCalls() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        ObjectStorage storage = mock(ObjectStorage.class);
+        PlatformBrandingDO withLogo = row("CodeFlow", "#f97316", null);
+        withLogo.setLogoOssRef("bucket/key");
+        withLogo.setLogoContentType("image/png");
+        when(dao.findActive()).thenReturn(withLogo);
+        when(storage.get("bucket/key")).thenReturn(new byte[]{1, 2, 3});
+        PlatformBrandingService service = newService(dao, storage);
+
+        byte[] first = service.logoBytes();
+        byte[] second = service.logoBytes();
+
+        assertArrayEquals(new byte[]{1, 2, 3}, first);
+        assertArrayEquals(new byte[]{1, 2, 3}, second);
+        verify(storage, times(1)).get("bucket/key");
+    }
+
+    @Test
+    void uploadLogoInvalidatesCacheForNewOssRef() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        ObjectStorage storage = mock(ObjectStorage.class);
+        when(storage.put(anyString(), anyString(), any())).thenReturn(
+                new StoredObject("bucket/new-logo.png", "abc", 3));
+        when(dao.updateLogo(anyString(), anyString(), eq(100L))).thenReturn(1);
+
+        PlatformBrandingDO withOldLogo = row("CodeFlow", "#f97316", null);
+        withOldLogo.setLogoOssRef("bucket/old-logo.png");
+        withOldLogo.setLogoContentType("image/png");
+        when(dao.findActive()).thenReturn(withOldLogo);
+        when(storage.get("bucket/old-logo.png")).thenReturn(new byte[]{1});
+
+        PlatformBrandingService service = newService(dao, storage);
+        service.logoBytes();
+
+        PlatformBrandingDO withNewLogo = row("CodeFlow", "#f97316", null);
+        withNewLogo.setLogoOssRef("bucket/new-logo.png");
+        withNewLogo.setLogoContentType("image/png");
+        when(dao.findActive()).thenReturn(withNewLogo);
+        when(storage.get("bucket/new-logo.png")).thenReturn(new byte[]{2});
+
+        service.uploadLogo(100L, new MockMultipartFile("file", "logo.png", "image/png", new byte[]{3}));
+
+        byte[] result = service.logoBytes();
+        assertArrayEquals(new byte[]{2}, result);
+        verify(storage).get("bucket/new-logo.png");
+    }
+
+    @Test
+    void publicConfigReturnsConfiguredDeploymentVersion() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        PlatformBrandingService service = newService(dao, new InMemoryObjectStorage(), "1.2.3");
+
+        assertEquals("1.2.3", service.publicConfig().getDeploymentVersion());
+    }
+
+    @Test
+    void publicConfigAcceptsSemanticDeploymentVersionWithPrerelease() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        PlatformBrandingService service = newService(dao, new InMemoryObjectStorage(), "1.2.3-beta.1");
+
+        assertEquals("1.2.3-beta.1", service.publicConfig().getDeploymentVersion());
+    }
+
+    @Test
+    void deploymentVersionFallsBackToPlaceholderWhenBlank() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        PlatformBrandingService service = newService(dao, new InMemoryObjectStorage(), "  ");
+
+        assertEquals("x.x.x", service.publicConfig().getDeploymentVersion());
+    }
+
+    @Test
+    void rejectsInvalidDeploymentVersionAtStartup() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        OssProperties props = new OssProperties();
+
+        assertThrows(IllegalStateException.class,
+                () -> new PlatformBrandingService(
+                        dao, new InMemoryObjectStorage(), props,
+                        "https://daily.ainative.example.com", "0.2.130", "not-a-version", false));
+    }
+
+    @Test
+    void exposesEffectivePublicBaseUrlAndRuntimeVersion() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        PlatformBrandingService service = newService(dao);
+
+        assertEquals("https://daily.ainative.example.com", service.effectivePublicBaseUrl());
+        assertEquals("0.2.130", service.recommendedRuntimeVersion());
+    }
+
+    @Test
+    void effectiveBaseUrlSupportsPrivateDeploymentsAndStripsTrailingSlashes() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        PlatformBrandingService service = newService(dao, new InMemoryObjectStorage(), "x.x.x");
+
+        assertEquals("https://daily.ainative.example.com", service.effectivePublicBaseUrl());
+
+        OssProperties props = new OssProperties();
+        PlatformBrandingService privateDeployment = new PlatformBrandingService(
+                dao, new InMemoryObjectStorage(), props,
+                "http://ainative.internal.example.com:8080//", "1.0.0", "x.x.x", false);
+
+        assertEquals("http://ainative.internal.example.com:8080", privateDeployment.effectivePublicBaseUrl());
+        assertEquals("http://ainative.internal.example.com:8080/api/mcp",
+                privateDeployment.publicConfig().getMcpBaseUrl());
+    }
+
+    @Test
+    void recommendedRuntimeVersionPreservesPrereleaseSuffix() {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        OssProperties props = new OssProperties();
+        PlatformBrandingService service = new PlatformBrandingService(
+                dao, new InMemoryObjectStorage(), props,
+                "https://daily.ainative.example.com", "0.3.0-beta.2", "x.x.x", false);
+
+        assertEquals("0.3.0-beta.2", service.recommendedRuntimeVersion());
+    }
+
+
+    @org.junit.jupiter.api.AfterEach
+    void resetLocale() { org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext(); }
+
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> ownedFailures() {
+        return java.util.stream.Stream.of(
+            org.junit.jupiter.params.provider.Arguments.of("name", "10001", "平台名称不能为空", "Platform name is required"),
+            org.junit.jupiter.params.provider.Arguments.of("theme", "10001", "主题配色不合法", "Invalid theme palette"),
+            org.junit.jupiter.params.provider.Arguments.of("color", "10001", "主题颜色格式不合法", "Invalid theme color format"),
+            org.junit.jupiter.params.provider.Arguments.of("domain", "10001", "域名格式不合法", "Invalid domain format"),
+            org.junit.jupiter.params.provider.Arguments.of("empty", "10001", "Logo 文件不能为空", "Logo file is required"),
+            org.junit.jupiter.params.provider.Arguments.of("size", "10001", "Logo 文件不能超过 512 KB", "Logo file must not exceed 512 KB"),
+            org.junit.jupiter.params.provider.Arguments.of("mime", "10001", "Logo 仅支持 PNG、JPG/JPEG、WebP、SVG、GIF、ICO、AVIF", "Logo supports only PNG, JPG/JPEG, WebP, SVG, GIF, ICO, and AVIF"),
+            org.junit.jupiter.params.provider.Arguments.of("svg", "10001", "SVG 必须为有效的静态图形，不支持脚本、外部资源、样式表或动画，请导出为使用行内样式的 SVG", "SVG must be a valid static graphic without scripts, external resources, stylesheets, or animation; export it with inline styles"),
+            org.junit.jupiter.params.provider.Arguments.of("storage", "17021", "Logo 上传失败", "Logo upload failed")
+        );
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("ownedFailures")
+    void ownedFailurePreservesDiagnosticCauseAndWriteOrderBeforeBilingualResponse(String branch, String code, String diagnostic, String english) {
+        PlatformBrandingDao dao = mock(PlatformBrandingDao.class);
+        ObjectStorage storage = mock(ObjectStorage.class);
+        when(storage.put(anyString(), anyString(), any())).thenThrow(new IllegalStateException("raw <secret> same-looking"));
+        PlatformBrandingService service = newService(dao, storage);
+        UpdatePlatformBrandingRequest request = new UpdatePlatformBrandingRequest();
+        request.setPlatformName("raw <b>Name</b>"); request.setThemeKey("ocean-blue"); request.setPrimaryColor("#2563eb");
+        org.junit.jupiter.api.function.Executable operation;
+        if (java.util.Set.of("name", "theme", "color", "domain").contains(branch)) {
+            switch (branch) {
+                case "name" -> request.setPlatformName("  ");
+                case "theme" -> request.setThemeKey("future <b>");
+                case "color" -> request.setPrimaryColor("blue");
+                default -> request.setDomain("http://wonder.example.com");
+            }
+            operation = () -> service.update(100L, request);
+        } else {
+            MockMultipartFile file = switch (branch) {
+                case "empty" -> null;
+                case "size" -> new MockMultipartFile("file", "raw.png", "image/png", new byte[512 * 1024 + 1]);
+                case "mime" -> new MockMultipartFile("file", "raw.pdf", "application/pdf", new byte[]{1});
+                case "svg" -> new MockMultipartFile("file", "raw.svg", "image/svg+xml", "<svg xmlns='http://www.w3.org/2000/svg'><script/></svg>".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                default -> new MockMultipartFile("file", "raw.png", "image/png", new byte[]{1, 2});
+            };
+            operation = () -> service.uploadLogo(100L, file);
+        }
+        BizException error = assertThrows(BizException.class, operation);
+        assertEquals(BizException.class, error.getClass());
+        assertEquals(code, error.getCode());
+        assertEquals(diagnostic, error.getMessage());
+        assertEquals(diagnostic, error.getLocalizedMessage());
+        assertNull(error.getCause());
+        verifyNoInteractions(dao);
+        if (!branch.equals("storage")) verifyNoInteractions(storage);
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.CHINA);
+        assertEquals(diagnostic, com.ainative.common.result.Result.fail(error).getMessage());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.US);
+        assertEquals(english, com.ainative.common.result.Result.fail(error).getMessage());
+    }
+
+    private static String constructorRecommendedRuntimeVersionDefault() {
+        String foundDefault = null;
+        for (Constructor<?> constructor : PlatformBrandingService.class.getConstructors()) {
+            for (Parameter parameter : constructor.getParameters()) {
+                Value annotation = parameter.getAnnotation(Value.class);
+                if (annotation != null && annotation.value().startsWith(RECOMMENDED_VERSION_PLACEHOLDER)
+                        && annotation.value().endsWith("}")) {
+                    foundDefault = annotation.value()
+                            .substring(RECOMMENDED_VERSION_PLACEHOLDER.length(),
+                                    annotation.value().length() - 1);
+                }
+            }
+        }
+        assertNotNull(foundDefault, "PlatformBrandingService 构造函数缺少 recommended-version 的 @Value 默认值");
+        return foundDefault;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String applicationYmlRecommendedVersionDefault() throws Exception {
+        // Community ships src/test/resources/application.yml, which shadows the real config on the test classpath.
+        Path mainConfig = Path.of("src/main/resources/application.yml");
+        assertTrue(Files.isRegularFile(mainConfig), "application.yml 必须存在于 src/main/resources");
+        try (InputStream in = Files.newInputStream(mainConfig)) {
+            Map<String, Object> root = new Yaml().loadAs(in, Map.class);
+            Map<String, Object> ainative = childSection(root, "ainative");
+            Map<String, Object> runtime = childSection(ainative, "runtime");
+            Object value = runtime.get("recommended-version");
+            assertNotNull(value, "缺少配置项: ainative.runtime.recommended-version");
+            String placeholder = String.valueOf(value);
+            assertTrue(placeholder.startsWith(YAML_RECOMMENDED_VERSION_PLACEHOLDER),
+                    "应保留 AINATIVE_RUNTIME_RECOMMENDED_VERSION 环境变量覆盖能力，实际: " + placeholder);
+            assertTrue(placeholder.endsWith("}"), "占位符必须闭合，实际: " + placeholder);
+            return placeholder.substring(YAML_RECOMMENDED_VERSION_PLACEHOLDER.length(),
+                    placeholder.length() - 1);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> childSection(Map<String, Object> parent, String key) {
+        Object value = parent.get(key);
+        assertNotNull(value, "缺少配置节: " + key);
+        return (Map<String, Object>) value;
+    }
+
+    private static PlatformBrandingService newService(PlatformBrandingDao dao) {
+        return newService(dao, new InMemoryObjectStorage());
+    }
+
+    private static PlatformBrandingService newService(
+            PlatformBrandingDao dao, ObjectStorage storage) {
+        return newService(dao, storage, "x.x.x");
+    }
+
+    private static PlatformBrandingService newService(
+            PlatformBrandingDao dao, ObjectStorage storage, String deploymentVersion) {
+        return newService(dao, storage, deploymentVersion, false);
+    }
+
+    private static PlatformBrandingService newService(
+            PlatformBrandingDao dao, ObjectStorage storage,
+            String deploymentVersion, boolean communityEdition) {
+        OssProperties props = new OssProperties();
+        props.setBucket("community-test");
+        return new PlatformBrandingService(
+                dao, storage, props, "https://daily.ainative.example.com",
+                "0.2.130", deploymentVersion, communityEdition);
+    }
+
+    private static PlatformBrandingDO row(String name, String color, String domain) {
+        PlatformBrandingDO row = new PlatformBrandingDO();
+        row.setPlatformName(name);
+        row.setThemeKey("ocean-blue");
+        row.setPrimaryColor(color);
+        row.setDomain(domain);
+        row.setVersion(3);
+        return row;
+    }
+}

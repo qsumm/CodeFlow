@@ -1,0 +1,113 @@
+/* 页面标题(设计契约 v5):20px/600 + 12px 灰描述 + 右侧操作组;跨页面统一 */
+.cf-page-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.cf-page-heading-copy { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cf-page-heading h1,
+.cf-page-heading .cf-page-heading-copy > h1 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -.01em;
+  color: var(--cf-text);
+}
+.cf-page-heading-description {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--cf-muted);
+  font-family: var(--cf-mono);
+  font-variant-numeric: tabular-nums;
+}
+.cf-page-heading-extra { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+
+/* ---------- 页面级横幅(2026-11-10 重构) ----------
+ * 页面级标题升级为品牌渐变横幅,卡片内的标题保持紧凑。
+ * 判定靠「不在 .ant-card-head-title 内」,31 个页面调用点无需改动。
+ */
+main .cf-page-heading:not(.ant-card-head-title .cf-page-heading) {
+  align-items: center;
+  padding: 18px 22px;
+  margin-bottom: 4px;
+  border-radius: 12px;
+  background: linear-gradient(115deg, color-mix(in srgb, var(--cf-sidebar) 92%, #000) 0%, var(--cf-raised) 78%);
+  border: 1px solid var(--cf-border);
+  border-left: 3px solid var(--cf-accent);
+  box-shadow: 0 8px 24px -20px rgba(0, 0, 0, .8);
+}
+
+main .cf-page-heading:not(.ant-card-head-title .cf-page-heading) h1,
+main .cf-page-heading:not(.ant-card-head-title .cf-page-heading) .cf-page-heading-copy > h1 {
+  color: var(--cf-text);
+  font-size: 22px;
+  font-weight: 750;
+  letter-spacing: .2px;
+}
+
+main .cf-page-heading:not(.ant-card-head-title .cf-page-heading) .cf-page-heading-description {
+  color: var(--cf-muted);
+  font-family: inherit;
+  font-size: 13px;
+  max-width: 62ch;
+}
+
+main .cf-page-heading:not(.ant-card-head-title .cf-page-heading) .cf-page-heading-extra .ant-btn {
+  height: 34px;
+  padding-inline: 14px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  main .cf-page-heading:not(.ant-card-head-title .cf-page-heading) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}
+
+
+
+/* 内容卡片:平铺面板(10px 圆角、发丝边、无阴影浮起) */
+.cf-content-card.ant-card {
+  box-shadow: none !important;
+  border-radius: 10px !important;
+}
+/* 卡片头升级为品牌渐变横幅:列表页、详情页、独立页三种结构由此统一,
+ * 无需改动任何页面调用点。 */
+.cf-content-card > .ant-card-head {
+  min-height: 52px;
+  padding: 12px 18px !important;
+  border-bottom: 1px solid var(--cf-border) !important;
+  background: linear-gradient(115deg, color-mix(in srgb, var(--cf-sidebar) 92%, #000) 0%, var(--cf-raised) 78%) !important;
+  border-bottom: 1px solid var(--cf-border) !important;
+  border-left: 3px solid var(--cf-accent);
+}
+.cf-content-card > .ant-card-head .cf-page-heading {
+  align-items: center;
+}
+.cf-content-card > .ant-card-head .cf-page-heading h1,
+.cf-content-card > .ant-card-head .cf-page-heading .cf-page-heading-copy > h1 {
+  color: var(--cf-text);
+  font-size: 18px;
+  font-weight: 720;
+  letter-spacing: .1px;
+}
+.cf-content-card > .ant-card-head .cf-page-heading-description {
+  color: var(--cf-muted);
+  font-family: inherit;
+  font-size: 12px;
+}
+.cf-content-card > .ant-card-head .ant-card-extra .ant-btn {
+  height: 32px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.cf-content-card > .ant-card-body { padding: 14px 16px !important; }

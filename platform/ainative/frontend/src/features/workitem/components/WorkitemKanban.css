@@ -1,0 +1,226 @@
+/* ── 工单看板精修(商用级视觉:卡片左状态色条、轻量徽章、弱化来源链) ── */
+
+/* 列容器:更浅的画布底,列头与卡片分层 */
+.wi-column {
+  background: var(--cf-panel, #f7f8fa);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+/* 列头 */
+.wi-col-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 2px 4px;
+}
+.wi-col-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.wi-col-title { font-size: 13px; font-weight: 650; letter-spacing: .2px; }
+.wi-col-count {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--cf-muted, #8a94a4);
+  background: var(--cf-surface, #fff);
+  border: 1px solid var(--cf-border, #e2e6ee);
+  border-radius: 999px;
+  padding: 1px 9px;
+}
+
+/* 卡片:白底浮层 + 左侧状态色条 + hover 上浮 */
+.wi-card {
+  position: relative;
+  border-radius: 10px !important;
+  border: 1px solid var(--cf-border, #e2e6ee);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  transition: box-shadow .18s cubic-bezier(.2, .7, .3, 1), transform .18s cubic-bezier(.2, .7, .3, 1), border-color .18s;
+  overflow: hidden;
+}
+.wi-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--wi-accent, var(--cf-accent, #4f7cff));
+  opacity: .85;
+}
+.wi-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(var(--cf-accent-rgb, 79, 124, 255), .45);
+  box-shadow: 0 6px 16px rgba(16, 24, 40, .10);
+}
+
+/* 徽章行 */
+.wi-card__top { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.wi-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.wi-badge--req  { color: #2456d6; background: rgba(64, 110, 235, .10); }
+.wi-badge--bug  { color: #c2410c; background: rgba(234, 88, 45, .10); }
+.wi-badge--task { color: #0f766e; background: rgba(16, 150, 138, .10); }
+.wi-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cf-accent-text, #2c5cd6);
+  background: rgba(var(--cf-accent-rgb, 79, 124, 255), .10);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.wi-status i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.wi-priority {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cf-muted, #8a94a4);
+  flex-shrink: 0;
+}
+.wi-priority i { width: 6px; height: 6px; border-radius: 50%; }
+.wi-priority--p0, .wi-priority--p1 { color: #dc2626; }
+.wi-priority--p2 { color: #d97706; }
+
+/* 标题 */
+.wi-card__title { font-size: 13.5px; font-weight: 560; line-height: 1.5; margin: 0 0 8px; }
+
+/* 来源链:弱化为元信息级,不再抢视觉 */
+.wi-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--cf-muted, #8a94a4);
+  margin-bottom: 6px;
+  text-decoration: none;
+}
+.wi-source:hover { color: var(--cf-accent-text, #2c5cd6); }
+
+/* 元信息行 */
+.wi-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 8px;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px dashed var(--cf-border, #e8ecf3);
+  font-size: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wi-card, .wi-card:hover { transition: none; transform: none; }
+}
+
+/* ── 工具栏精修 ── */
+/* 新建工单:主行动按钮,商用级重量感 */
+.wi-create-btn {
+  font-weight: 600;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(var(--cf-accent-rgb, 79, 124, 255), .35);
+  transition: transform .15s cubic-bezier(.2, .7, .3, 1), box-shadow .15s;
+}
+.wi-create-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(var(--cf-accent-rgb, 79, 124, 255), .45);
+}
+@media (prefers-reduced-motion: reduce) {
+  .wi-create-btn, .wi-create-btn:hover { transition: none; transform: none; }
+}
+
+.wi-source, a.wi-source, a.wi-source:visited, a.wi-source:active {
+  color: var(--cf-muted, #8a94a4) !important;
+}
+a.wi-source:hover { color: var(--cf-accent-text, #2c5cd6) !important; }
+
+/* ── 横向泳道布局(状态行 × 卡片横排,贴合流水线隐喻) ── */
+/* 看板行:标题列收窄、行距收紧(视觉评审:行与行之间空得过分) */
+.wi-row {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 0 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: transparent;
+  transition: background .15s;
+}
+.wi-row:hover { background: color-mix(in srgb, var(--cf-panel, #f7f8fa) 72%, transparent); }
+.wi-row[data-over='true'] { background: rgba(var(--cf-accent-rgb, 79, 124, 255), .07); }
+/* 列头:色点 + 标题 + 计数同行(此前计数单独掉到下一行,像残留数字) */
+.wi-row-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 0; }
+.wi-row-dot { width: 8px; height: 8px; border-radius: 50%; }
+.wi-row-title { font-size: 13px; font-weight: 650; }
+.wi-row-count {
+  font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--cf-muted, #8a94a4);
+  background: var(--cf-field, #f6f8fb);
+  border: 1px solid var(--cf-border, #e2e6ee);
+  border-radius: 999px; padding: 1px 9px; line-height: 18px;
+}
+.wi-row-cards {
+  display: flex; gap: 12px; align-items: stretch;
+  overflow-x: auto; padding-bottom: 6px;
+  scroll-snap-type: x proximity;
+}
+.wi-row-cards > * { scroll-snap-align: start; }
+/* 空态:一块完整的居中面板,而不是飘在空白里的小虚线方块 */
+.wi-row-empty {
+  align-self: center;
+  justify-self: start;
+  min-width: 240px;
+  max-width: 420px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--cf-muted, #8a94a4);
+  padding: 16px 20px;
+  border: 1px dashed var(--cf-border, #e2e6ee);
+  border-radius: 8px;
+  background: var(--cf-field, #f6f8fb);
+  border-radius: 10px;
+}
+.wi-row-more { align-self: center; flex-shrink: 0; }
+
+/* ── 工具条:对齐 34px 设计系统(2026-11-10)。原 30px 硬编码让同一工具栏里
+ * 「高级筛选 30 / 输入框 34」大小不一,交给主题令牌统一。 ── */
+/* wi-toolbar-v5 */
+.cf-workitems .ant-card-body > .ant-space { margin-bottom: 14px !important; }
+.cf-workitems .ant-segmented { border-radius: 8px; }
+.cf-workitems .ant-segmented-item { font-size: 12px; }
+.cf-workitems .wi-create-btn { border-radius: 8px !important; box-shadow: none !important; }
+.cf-workitems .wi-create-btn:hover { transform: none; box-shadow: none; }
+.cf-workitems .ant-table-thead > tr > th { background: var(--cf-sidebar) !important; }
+
+/* 空库大空态:居中面板(内容少时页面不再只剩几条稀疏横带+大片空白) */
+.wi-kanban-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 280px;
+  border: 1px dashed var(--cf-border, #e2e6ee);
+  border-radius: 10px;
+  background: var(--cf-field, #f6f8fb);
+}
+.wi-kanban-empty__icon { font-size: 34px; opacity: .5; }
+.wi-kanban-empty__title { margin: 0; font-size: 14px; font-weight: 600; color: var(--cf-text, #1c2330); }
+.wi-kanban-empty__desc { margin: 0; max-width: 46ch; text-align: center; font-size: 12px; color: var(--cf-muted, #8a94a4); line-height: 1.6; }
+.wi-kanban-empty__icon::before { content: '🗂'; }

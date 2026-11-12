@@ -1,0 +1,15 @@
+/* 设置模态:左类目(132px) + 右内容;内部 Card 去边框,避免盒中盒 */
+.settings-modal .ant-modal-body { padding-top: 4px; }
+.settings-modal__body { display: grid; grid-template-columns: 132px 1fr; gap: 16px; min-height: 320px; }
+.settings-modal__nav { display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--cf-border); padding-right: 10px; }
+.settings-modal__item {
+  height: 30px; display: flex; align-items: center; padding: 0 10px;
+  border: none; background: transparent; color: var(--cf-text); font-size: 12.5px;
+  border-radius: 8px; cursor: pointer; text-align: left; font-family: inherit;
+}
+.settings-modal__item:hover { background: var(--cf-raised); }
+.settings-modal__item.on { background: rgba(var(--cf-accent-rgb), .14); color: var(--cf-accent-text); }
+.settings-modal__content { min-width: 0; }
+.settings-modal__content .ant-card { border: none !important; box-shadow: none !important; background: transparent !important; }
+.settings-modal__content .ant-card-head { min-height: 0; padding: 0 0 10px !important; background: transparent !important; border-bottom: 1px solid var(--cf-border) !important; }
+@media (max-width: 720px) { .settings-modal__body { grid-template-columns: 1fr; } .settings-modal__nav { flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--cf-border); padding: 0 0 8px; } }

@@ -1,0 +1,118 @@
+.auth-entry-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(340px, .85fr);
+  align-items: center;
+  gap: clamp(40px, 6vw, 100px);
+  min-height: calc(100svh - 60px);
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 64px clamp(24px, 5vw, 80px);
+  background: var(--cf-bg);
+}
+
+.auth-entry-story { min-width: 0; }
+.auth-entry-intro { text-align: center; }
+.auth-entry-eyebrow {
+  margin: 0 0 22px;
+  color: var(--cf-accent-text);
+  font-size: clamp(26px, 2.8vw, 40px);
+  font-weight: 500;
+  letter-spacing: -.015em;
+}
+.auth-entry-story h1 {
+  margin: 0;
+  color: var(--cf-text);
+  font-size: clamp(22px, 2.1vw, 30px);
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: .025em;
+}
+
+/* A delivery circuit, not a live status display. Color follows the platform accent. */
+.auth-delivery {
+  position: relative;
+  margin: 48px 0 0;
+  aspect-ratio: 640 / 240;
+}
+.auth-delivery-lines { display: block; width: 100%; height: auto; overflow: visible; }
+.auth-delivery-track { stroke: var(--cf-border); stroke-width: 1.5; }
+.auth-delivery-return { stroke: var(--cf-border); stroke-width: 1; }
+.auth-delivery-flow {
+  stroke: var(--cf-accent-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 7 93;
+  animation: auth-delivery-travel 8s linear infinite;
+}
+.auth-delivery-flow--return { opacity: .45; animation-delay: -4s; stroke-width: 1.5; }
+.auth-delivery-steps {
+  position: absolute;
+  inset: 0 0 auto;
+  height: calc(200% / 3);
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  align-items: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.auth-delivery-steps li { position: relative; display: grid; justify-items: center; }
+.auth-delivery-node {
+  display: grid;
+  place-items: center;
+  width: min(48px, 70%);
+  aspect-ratio: 1;
+  border: 1px solid var(--cf-border);
+  border-radius: 12px;
+  background: var(--cf-panel);
+  color: var(--cf-text);
+  font-size: clamp(16px, 2vw, 22px);
+}
+.auth-delivery-steps li:last-child .auth-delivery-node { color: var(--cf-accent-text); border-color: var(--cf-accent-text); }
+.auth-delivery-label { position: absolute; top: calc(100% + 12px); color: var(--cf-muted); font-size: clamp(9px, 1vw, 12px); white-space: nowrap; }
+.auth-delivery-label--accent { color: var(--cf-accent-text); }
+.auth-delivery figcaption {
+  position: absolute;
+  top: 75%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 2px 14px;
+  background: var(--cf-bg);
+  color: var(--cf-muted);
+  font-size: 11px;
+  letter-spacing: .12em;
+}
+@keyframes auth-delivery-travel { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+
+.auth-entry-form-panel { display: flex; align-items: center; justify-content: center; min-width: 0; }
+.auth-entry-card { width: min(420px, 100%); border: 1px solid var(--cf-border); border-radius: 12px; background: var(--cf-panel); box-shadow: none; }
+.auth-entry-card .ant-card-body { padding: 36px; }
+.auth-entry-card .ant-input-affix-wrapper.ant-input-outlined,
+.auth-entry-card .ant-input-affix-wrapper.ant-input-outlined:hover,
+.auth-entry-card .ant-input-affix-wrapper.ant-input-outlined:focus-within { background: transparent; }
+/* Browser autofill paints the inner input even when its normal background is transparent. */
+html .auth-entry-card input.ant-input:is(:autofill, :-webkit-autofill) {
+  -webkit-box-shadow: 0 0 0 1000px var(--cf-panel) inset !important;
+  box-shadow: 0 0 0 1000px var(--cf-panel) inset !important;
+  -webkit-text-fill-color: var(--cf-text);
+  caret-color: var(--cf-text);
+}
+.auth-entry-title { margin: 0 0 28px !important; color: var(--cf-text) !important; text-align: left !important; }
+.auth-entry-subtitle { margin: -16px 0 22px; color: var(--cf-muted); font-size: 13px; line-height: 1.6; }
+.auth-entry-card .ant-btn-primary { height: 44px; }
+.auth-entry-link { text-align: center; }
+.auth-entry-link a { color: var(--cf-accent-text); font-weight: 500; }
+
+@media (max-width: 900px) {
+  .auth-entry-page { gap: 28px; padding: 48px 24px; grid-template-columns: minmax(0, 1fr) minmax(300px, .9fr); }
+  .auth-entry-card .ant-card-body { padding: 28px; }
+}
+@media (max-width: 680px) {
+  .auth-entry-page { grid-template-columns: minmax(0, 1fr); gap: 36px; padding: 40px 20px; }
+  .auth-entry-story { width: min(480px, 100%); margin: 0 auto; }
+  .auth-entry-story h1 { font-size: 24px; }
+  .auth-delivery { margin-top: 26px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-delivery-flow { animation: none; stroke-dasharray: none; opacity: .25; }
+}

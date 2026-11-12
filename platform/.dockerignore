@@ -1,0 +1,21 @@
+# Docker 构建上下文排除规则
+#
+# 上下文根 = platform/(platform/build.sh:62 的 docker build ... "$APP_DIR/..")
+# Docker 只读取【上下文根目录】的 .dockerignore;
+# platform/ainative/.dockerignore 对本次构建无效(它在上下文子目录里)。
+#
+# 规则按顺序匹配,【最后匹配者生效】;`!` 用于重新包含。
+
+# 密钥文件(0600,含 AINATIVE_SECRET_MASTER_KEY / AINATIVE_JWT_SECRET)
+# —— 绝不可进入构建上下文(远程 DOCKER_HOST 时会离开本机)
+runtime.env
+
+# 构建中间产物与日志(体积大、对交付镜像无用)
+ainative/target/*
+ainative/logs
+ainative/frontend/node_modules
+
+# 保留交付镜像唯一需要的文件:platform/Dockerfile.platform:8 要 COPY 它。
+# 注意:不能排除 ainative/target 【目录本身】—— Docker 不允许在父目录被排除时
+# 再用 `!` 重新包含其中的文件,那样 COPY 会因找不到 jar 而失败。
+!ainative/target/ainative.jar

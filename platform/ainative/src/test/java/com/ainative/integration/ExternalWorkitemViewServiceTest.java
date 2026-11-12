@@ -1,0 +1,141 @@
+package com.ainative.integration;
+
+import com.ainative.integration.common.ExternalPrincipalDO;
+import com.ainative.integration.common.ExternalPrincipalDao;
+import com.ainative.integration.common.ExternalWorkitemLinkDO;
+import com.ainative.integration.common.ExternalWorkitemLinkDao;
+import com.ainative.workitem.dto.ExternalCollaborationVO;
+import com.ainative.workitem.dto.ExternalPrincipalVO;
+import org.junit.jupiter.api.Test;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+class ExternalWorkitemViewServiceTest {
+
+    @Test
+    void buildsProviderNeutralCollaborationViewFromLinkSnapshot() {
+        ExternalWorkitemLinkDao linkDao = mock(ExternalWorkitemLinkDao.class);
+        ExternalPrincipalDao principalDao = mock(ExternalPrincipalDao.class);
+        ExternalWorkitemLinkDO link = new ExternalWorkitemLinkDO();
+        link.setId(8L);
+        link.setProvider("ZENTAO");
+        link.setExternalProjectId("2087214");
+        link.setExternalWorkitemId("84877007");
+        link.setSourceStatusName("处理中");
+        link.setReporterPrincipalId(101L);
+        link.setBusinessOwnerPrincipalId(102L);
+        link.setPrincipalRelationsJson("""
+                [{"source_key":"collaborators","display_name":"协作者","principal_ids":[103]}]
+                """);
+        link.setSyncStatus("HEALTHY");
+
+        when(linkDao.listByWorkitem(100L, 500L)).thenReturn(List.of(link));
+        when(principalDao.listByIds(anyCollection())).thenAnswer(invocation -> {
+            Collection<Long> ids = invocation.getArgument(0);
+            return ids.stream().map(this::principal).toList();
+        });
+
+        ExternalCollaborationVO result = new ExternalWorkitemViewService(linkDao, principalDao).find(100L, 500L);
+
+        assertEquals("ZENTAO", result.getProvider());
+        assertEquals("84877007", result.getExternalWorkitemId());
+        assertEquals("用户-101", result.getReporter().getDisplayName());
+        assertEquals("用户-102", result.getBusinessOwner().getDisplayName());
+        assertEquals(1, result.getPrincipalRelations().size());
+        assertEquals("collaborators", result.getPrincipalRelations().get(0).getSourceKey());
+        assertEquals("用户-103", result.getPrincipalRelations().get(0).getPrincipals().get(0).getDisplayName());
+    }
+
+    @Test
+    void pageWithNoResolvedReportersSkipsNullReporterIds() {
+        ExternalWorkitemLinkDao linkDao = mock(ExternalWorkitemLinkDao.class);
+        ExternalPrincipalDao principalDao = mock(ExternalPrincipalDao.class);
+        ExternalWorkitemLinkDO first = new ExternalWorkitemLinkDO();
+        first.setId(1L);
+        first.setWorkitemId(500L);
+        ExternalWorkitemLinkDO second = new ExternalWorkitemLinkDO();
+        second.setId(2L);
+        second.setWorkitemId(501L);
+
+        Map<Long, ExternalPrincipalVO> result = new ExternalWorkitemViewService(linkDao, principalDao)
+                .reportersByWorkitem(List.of(first, second));
+
+        assertEquals(Map.of(), result);
+    }
+
+    @Test
+    void formatsZentaoIdentityWhenTheSourceDoesNotProvideADisplayName() {
+        ExternalWorkitemLinkDao linkDao = mock(ExternalWorkitemLinkDao.class);
+        ExternalPrincipalDao principalDao = mock(ExternalPrincipalDao.class);
+        ExternalPrincipalDO principal = principal(101L);
+        principal.setSubjectId("320687");
+        principal.setDisplayName(null);
+        when(principalDao.findById(101L)).thenReturn(principal);
+
+        assertEquals("ZENTAO 用户（ID: 320687）",
+                new ExternalWorkitemViewService(linkDao, principalDao).principalName(101L));
+    }
+
+    @Test
+    void formatsExternalTimelineIdentityWithProviderAndStableSubjectId() {
+        ExternalWorkitemLinkDao linkDao = mock(ExternalWorkitemLinkDao.class);
+        ExternalPrincipalDao principalDao = mock(ExternalPrincipalDao.class);
+        ExternalPrincipalDO principal = principal(101L);
+        principal.setSubjectId("320687");
+        principal.setDisplayName("外部用户");
+        when(principalDao.findById(101L)).thenReturn(principal);
+
+        assertEquals("外部用户（ZENTAO · 320687）",
+                new ExternalWorkitemViewService(linkDao, principalDao).principalDisplayName(101L));
+    }
+
+    @Test
+    void resolvesSourceCreatorForImportedWorkitemsInOneBatch() {
+        ExternalWorkitemLinkDao linkDao = mock(ExternalWorkitemLinkDao.class);
+        ExternalPrincipalDao principalDao = mock(ExternalPrincipalDao.class);
+        ExternalWorkitemLinkDO externalLink = new ExternalWorkitemLinkDO();
+        externalLink.setId(1L);
+        externalLink.setWorkitemId(500L);
+        externalLink.setProvider("ZENTAO");
+        externalLink.setReporterPrincipalId(101L);
+        ExternalWorkitemLinkDO anotherProviderLink = new ExternalWorkitemLinkDO();
+        anotherProviderLink.setId(2L);
+        anotherProviderLink.setWorkitemId(500L);
+        anotherProviderLink.setProvider("JIRA");
+        anotherProviderLink.setReporterPrincipalId(102L);
+        ExternalWorkitemLinkDO withoutReporter = new ExternalWorkitemLinkDO();
+        withoutReporter.setId(3L);
+        withoutReporter.setWorkitemId(501L);
+        withoutReporter.setProvider("ZENTAO");
+
+        ExternalPrincipalDO reporter = principal(101L);
+        reporter.setSubjectId("440501");
+        reporter.setDisplayName("煊童");
+        when(principalDao.listByIds(anyCollection())).thenReturn(List.of(reporter));
+
+        Map<Long, ExternalPrincipalVO> result = new ExternalWorkitemViewService(linkDao, principalDao)
+                .reportersByWorkitem(List.of(anotherProviderLink, withoutReporter, externalLink));
+
+        assertEquals("煊童", result.get(500L).getDisplayName());
+        assertEquals("440501", result.get(500L).getSubjectId());
+        assertFalse(result.containsKey(501L));
+    }
+
+    private ExternalPrincipalDO principal(Long id) {
+        ExternalPrincipalDO principal = new ExternalPrincipalDO();
+        principal.setId(id);
+        principal.setProvider("ZENTAO");
+        principal.setSubjectId("staff-" + id);
+        principal.setDisplayName("用户-" + id);
+        return principal;
+    }
+}

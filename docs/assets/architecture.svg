@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 560" font-family="-apple-system,'PingFang SC','Segoe UI',sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a94a6"/>
+    </marker>
+    <linearGradient id="hdr" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1b6fe0"/><stop offset="1" stop-color="#2383e2"/>
+    </linearGradient>
+  </defs>
+
+  <text x="24" y="40" font-size="22" font-weight="700" fill="#1c2330">CodeFlow · 系统架构</text>
+  <text x="24" y="64" font-size="13" fill="#5a6474">需求进、交付出 —— 数字员工按 SDLC 流水线自动交付,人只做澄清与验收</text>
+
+  <!-- 外部源 -->
+  <g>
+    <rect x="24" y="110" width="200" height="120" rx="12" fill="#ffffff" stroke="#c9d4e4"/>
+    <rect x="24" y="110" width="200" height="34" rx="12" fill="#eef4ff"/>
+    <rect x="24" y="132" width="200" height="12" fill="#eef4ff"/>
+    <text x="124" y="133" text-anchor="middle" font-size="14" font-weight="700" fill="#1b4fa8">外部工单平台</text>
+    <text x="124" y="168" text-anchor="middle" font-size="13" fill="#2a3446">ZenTao 禅道 18.10+</text>
+    <text x="124" y="190" text-anchor="middle" font-size="11.5" fill="#5a6474">需求 / 缺陷自动拉取 ≤60s</text>
+    <text x="124" y="210" text-anchor="middle" font-size="11.5" fill="#5a6474">交付结果自动回写</text>
+  </g>
+
+  <!-- 平台 -->
+  <g>
+    <rect x="300" y="110" width="300" height="120" rx="12" fill="#ffffff" stroke="#2383e2" stroke-width="1.6"/>
+    <rect x="300" y="110" width="300" height="34" rx="12" fill="url(#hdr)"/>
+    <rect x="300" y="132" width="300" height="12" fill="url(#hdr)"/>
+    <text x="450" y="133" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">CodeFlow 平台</text>
+    <text x="450" y="166" text-anchor="middle" font-size="12.5" fill="#2a3446">Spring Boot · MyBatis · MySQL · Redis</text>
+    <text x="450" y="187" text-anchor="middle" font-size="12" fill="#5a6474">工单 · SDLC 状态机 · 小队/数字员工</text>
+    <text x="450" y="207" text-anchor="middle" font-size="12" fill="#5a6474">MCP 服务 · 审计 · 多源集成 · WebSocket</text>
+  </g>
+
+  <!-- 执行器运行时 -->
+  <g>
+    <rect x="676" y="110" width="250" height="120" rx="12" fill="#ffffff" stroke="#c9d4e4"/>
+    <rect x="676" y="110" width="250" height="34" rx="12" fill="#eef4ff"/>
+    <rect x="676" y="132" width="250" height="12" fill="#eef4ff"/>
+    <text x="801" y="133" text-anchor="middle" font-size="14" font-weight="700" fill="#1b4fa8">执行器运行时(runtime/)</text>
+    <text x="801" y="166" text-anchor="middle" font-size="12.5" fill="#2a3446">Python stdlib-only 守护进程</text>
+    <text x="801" y="187" text-anchor="middle" font-size="12" fill="#5a6474">WebSocket 接单 · 任务包解压</text>
+    <text x="801" y="207" text-anchor="middle" font-size="12" fill="#5a6474">驱动 Agent CLI · 产物回传</text>
+  </g>
+
+  <!-- 模型端点 -->
+  <g>
+    <rect x="1002" y="110" width="154" height="120" rx="12" fill="#ffffff" stroke="#c9d4e4"/>
+    <rect x="1002" y="110" width="154" height="34" rx="12" fill="#eef4ff"/>
+    <rect x="1002" y="132" width="154" height="12" fill="#eef4ff"/>
+    <text x="1079" y="133" text-anchor="middle" font-size="14" font-weight="700" fill="#1b4fa8">模型端点</text>
+    <text x="1079" y="168" text-anchor="middle" font-size="12.5" fill="#2a3446">Anthropic 兼容</text>
+    <text x="1079" y="190" text-anchor="middle" font-size="11.5" fill="#5a6474">MiniMax / Claude</text>
+    <text x="1079" y="210" text-anchor="middle" font-size="11.5" fill="#5a6474">GLM / 自部署</text>
+  </g>
+
+  <!-- 箭头 -->
+  <line x1="224" y1="170" x2="296" y2="170" stroke="#8a94a6" stroke-width="1.6" marker-end="url(#arr)" marker-start="url(#arr)"/>
+  <text x="260" y="158" text-anchor="middle" font-size="10.5" fill="#5a6474">拉取/回写</text>
+  <line x1="600" y1="170" x2="672" y2="170" stroke="#8a94a6" stroke-width="1.6" marker-end="url(#arr)" marker-start="url(#arr)"/>
+  <text x="636" y="158" text-anchor="middle" font-size="10.5" fill="#5a6474">WS 派发/结果</text>
+  <line x1="926" y1="170" x2="998" y2="170" stroke="#8a94a6" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="962" y="158" text-anchor="middle" font-size="10.5" fill="#5a6474">驱动</text>
+
+  <!-- 前端 -->
+  <g>
+    <rect x="300" y="300" width="300" height="96" rx="12" fill="#ffffff" stroke="#c9d4e4"/>
+    <rect x="300" y="300" width="300" height="34" rx="12" fill="#eef4ff"/>
+    <rect x="300" y="322" width="300" height="12" fill="#eef4ff"/>
+    <text x="450" y="323" text-anchor="middle" font-size="14" font-weight="700" fill="#1b4fa8">Web 控制台(React)</text>
+    <text x="450" y="358" text-anchor="middle" font-size="12" fill="#5a6474">工单看板 · 交付进度跟踪 · 澄清对话</text>
+    <text x="450" y="378" text-anchor="middle" font-size="12" fill="#5a6474">小队/数字员工/SDLC 配置 · 审计 · 洞察</text>
+  </g>
+  <line x1="450" y1="296" x2="450" y2="234" stroke="#8a94a6" stroke-width="1.6" marker-end="url(#arr)" marker-start="url(#arr)"/>
+
+  <!-- MCP -->
+  <g>
+    <rect x="676" y="300" width="250" height="96" rx="12" fill="#ffffff" stroke="#c9d4e4"/>
+    <rect x="676" y="300" width="250" height="34" rx="12" fill="#eef4ff"/>
+    <rect x="676" y="322" width="250" height="12" fill="#eef4ff"/>
+    <text x="801" y="323" text-anchor="middle" font-size="14" font-weight="700" fill="#1b4fa8">MCP 服务</text>
+    <text x="801" y="358" text-anchor="middle" font-size="12" fill="#5a6474">工单 / 小队 / SDLC / 执行器</text>
+    <text x="801" y="378" text-anchor="middle" font-size="12" fill="#5a6474">Claude Code · Codex · Cursor 直连</text>
+  </g>
+  <line x1="596" y1="348" x2="672" y2="348" stroke="#8a94a6" stroke-width="1.6" marker-end="url(#arr)" marker-start="url(#arr)"/>
+
+  <!-- SDLC 流水线 -->
+  <g>
+    <rect x="24" y="440" width="1132" height="96" rx="12" fill="#f7f9fc" stroke="#c9d4e4"/>
+    <text x="44" y="470" font-size="13" font-weight="700" fill="#1c2330">SDLC 交付流水线(自动接棒 · 失败自动重试 · 全程留痕)</text>
+    <g font-size="13" font-weight="600" text-anchor="middle">
+      <rect x="44" y="486" width="170" height="34" rx="17" fill="#eef4ff" stroke="#9cc0f0"/><text x="129" y="508" fill="#1b4fa8">需求澄清(AI)</text>
+      <rect x="248" y="486" width="190" height="34" rx="17" fill="#eef4ff" stroke="#9cc0f0"/><text x="343" y="508" fill="#1b4fa8">分析与分支准备</text>
+      <rect x="472" y="486" width="170" height="34" rx="17" fill="#eef4ff" stroke="#9cc0f0"/><text x="557" y="508" fill="#1b4fa8">编码与测试</text>
+      <rect x="676" y="486" width="150" height="34" rx="17" fill="#eef4ff" stroke="#9cc0f0"/><text x="751" y="508" fill="#1b4fa8">交付与验证</text>
+      <rect x="860" y="486" width="140" height="34" rx="17" fill="#eef4ff" stroke="#9cc0f0"/><text x="930" y="508" fill="#1b4fa8">代码评审</text>
+      <rect x="1034" y="486" width="100" height="34" rx="17" fill="#e8f7ee" stroke="#7fd0a0"/><text x="1084" y="508" fill="#167a3d">已发布</text>
+    </g>
+    <g stroke="#8a94a6" stroke-width="1.4">
+      <line x1="214" y1="503" x2="246" y2="503" marker-end="url(#arr)"/>
+      <line x1="438" y1="503" x2="470" y2="503" marker-end="url(#arr)"/>
+      <line x1="642" y1="503" x2="674" y2="503" marker-end="url(#arr)"/>
+      <line x1="826" y1="503" x2="858" y2="503" marker-end="url(#arr)"/>
+      <line x1="1000" y1="503" x2="1032" y2="503" marker-end="url(#arr)"/>
+    </g>
+    <text x="129" y="536" text-anchor="middle" font-size="10.5" fill="#5a6474">人:说清楚需求</text>
+    <text x="557" y="536" text-anchor="middle" font-size="10.5" fill="#5a6474">数字员工自动完成</text>
+    <text x="930" y="536" text-anchor="middle" font-size="10.5" fill="#5a6474">自动接棒 / 返工</text>
+    <text x="1084" y="536" text-anchor="middle" font-size="10.5" fill="#5a6474">人:验收</text>
+  </g>
+</svg>

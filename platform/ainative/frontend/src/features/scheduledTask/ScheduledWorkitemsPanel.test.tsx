@@ -1,0 +1,295 @@
+import { afterEach as resetAfterEach } from 'vitest';
+import { act } from '@testing-library/react';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import { i18n } from '@/shared/i18n';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { http, HttpResponse } from 'msw';
+import { message } from 'antd';
+import { server } from '@/test/mocks/server';
+import { useAuthStore } from '@/shared/auth/store';
+import { ScheduledWorkitemsPanel } from './ScheduledWorkitemsPanel';
+
+const FUTURE = new Date(Date.now() + 3_600_000).toISOString();
+const PAST = new Date(Date.now() - 3_600_000).toISOString();
+
+const PENDING_ITEM = {
+  id: 1, title: '定时需求A', workType: 'REQ', statusName: '新建', priority: 2,
+  assigneeType: 'AGENT', assigneeRef: 11, version: 1,
+  gmtCreate: '2026-09-01', gmtModified: '2026-09-01',
+  scheduledStartAt: FUTURE, scheduledStartTriggeredAt: null, scheduledPhase: 'PENDING',
+};
+
+const DONE_ITEM = {
+  id: 2, title: '定时需求B', workType: 'REQ', statusName: '已发布', priority: 2,
+  assigneeType: 'AGENT', assigneeRef: 12, version: 1,
+  gmtCreate: '2026-09-02', gmtModified: '2026-09-02',
+  scheduledStartAt: null, scheduledStartTriggeredAt: PAST, scheduledPhase: 'DONE',
+};
+
+function renderPanel() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/scheduled-tasks']}>
+        <Routes>
+          <Route path="/scheduled-tasks" element={<ScheduledWorkitemsPanel />} />
+          <Route path="/workitems/:id" element={<div>工作项详情页</div>} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+function useWorkitemHandler(list: unknown[], requests: string[]) {
+  server.use(
+    http.get('/api/workitems', ({ request }) => {
+      requests.push(new URL(request.url).searchParams.toString());
+      return HttpResponse.json({
+        success: true, code: '0', message: '', traceId: null,
+        data: { list, total: list.length, pageNum: 1, pageSize: 20 },
+      });
+    }),
+  );
+}
+
+function useScheduledStartHandler(calls: { id: string; body: unknown }[]) {
+  server.use(
+    http.put('/api/workitems/:id/scheduled-start', async ({ request, params }) => {
+      calls.push({ id: String(params.id), body: await request.json() });
+      return HttpResponse.json({ success: true, code: '0', message: '', data: PENDING_ITEM });
+    }),
+  );
+}
+
+describe('ScheduledWorkitemsPanel', () => {
+  const warnings: unknown[] = [];
+
+  beforeEach(() => {
+    useAuthStore.setState({ accessLevel: 'READ_WRITE' });
+    warnings.length = 0;
+    vi.spyOn(message, 'success').mockImplementation(() => undefined as never);
+    vi.spyOn(message, 'warning').mockImplementation((content) => {
+      warnings.push(content);
+      return undefined as never;
+    });
+  });
+
+  it('aggregates pending and triggered scheduled workitems with the derived phase and status', async () => {
+    const requests: string[] = [];
+    useWorkitemHandler([PENDING_ITEM, DONE_ITEM], requests);
+
+    renderPanel();
+
+    expect(await screen.findByText('定时需求A')).toBeInTheDocument();
+    expect(screen.getByText('定时需求B')).toBeInTheDocument();
+    expect(screen.getAllByText((_, element) => element?.textContent === '共 2 个工作项').length).toBeGreaterThan(0);
+    expect(screen.getByText('全部')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '所在阶段' })).toBeInTheDocument();
+    expect(screen.getByText('待触发')).toBeInTheDocument();
+    expect(screen.getByText('已完成')).toBeInTheDocument();
+    expect(screen.getByText('新建')).toBeInTheDocument();
+    expect(screen.getByText('已发布')).toBeInTheDocument();
+    expect(requests[0]).toContain('scheduledStart=ALL');
+    expect(requests[0]).not.toContain('mineScope');
+  });
+
+  it('keeps all three actions visible and only enables them for pending schedules', async () => {
+    const requests: string[] = [];
+    useWorkitemHandler([PENDING_ITEM, DONE_ITEM], requests);
+
+    renderPanel();
+    await screen.findByText('定时需求A');
+
+    const pendingRow = screen.getByText('定时需求A').closest('tr')!;
+    expect(within(pendingRow).getByRole('button', { name: '修改时间 #1' })).toBeEnabled();
+    expect(within(pendingRow).getByRole('button', { name: '立即启动 #1' })).toBeEnabled();
+    expect(within(pendingRow).getByRole('button', { name: '取消定时 #1' })).toBeEnabled();
+
+    const doneRow = screen.getByText('定时需求B').closest('tr')!;
+    expect(within(doneRow).getByRole('button', { name: '修改时间 #2' })).toBeDisabled();
+    expect(within(doneRow).getByRole('button', { name: '立即启动 #2' })).toBeDisabled();
+    expect(within(doneRow).getByRole('button', { name: '取消定时 #2' })).toBeDisabled();
+    expect(within(doneRow).getByRole('button', { name: '查看 #2' })).toBeEnabled();
+  });
+
+  it('explains why the actions are unavailable on an already finished workitem', async () => {
+    const user = userEvent.setup();
+    const requests: string[] = [];
+    useWorkitemHandler([DONE_ITEM], requests);
+
+    renderPanel();
+    await screen.findByText('定时需求B');
+
+    await user.hover(screen.getByRole('button', { name: '取消定时 #2' }).parentElement!);
+
+    expect(await screen.findByText('工作项已完成，无法再调整定时')).toBeInTheDocument();
+  });
+
+  it('narrows to my own workitems and searches by title', async () => {
+    const user = userEvent.setup();
+    const requests: string[] = [];
+    useWorkitemHandler([PENDING_ITEM], requests);
+
+    renderPanel();
+    await screen.findByText('定时需求A');
+
+    await user.click(screen.getByText('我创建的'));
+    await waitFor(() => expect(requests[requests.length - 1]).toContain('mineScope=CREATED'));
+
+    await user.type(screen.getByLabelText('工作项标题筛选'), '定时需求{Enter}');
+    await waitFor(() => {
+      const last = requests[requests.length - 1];
+      expect(last).toContain(`keyword=${encodeURIComponent('定时需求')}`);
+      expect(last).toContain('mineScope=CREATED');
+      expect(last).toContain('page=1');
+    });
+  });
+
+  it('cancels the schedule through the existing scheduled-start endpoint', async () => {
+    const user = userEvent.setup();
+    const requests: string[] = [];
+    const calls: { id: string; body: unknown }[] = [];
+    useWorkitemHandler([PENDING_ITEM], requests);
+    useScheduledStartHandler(calls);
+
+    renderPanel();
+    await user.click(await screen.findByRole('button', { name: '取消定时 #1' }));
+
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0].id).toBe('1');
+    expect(calls[0].body).toEqual({ scheduledStartAt: null });
+  });
+
+  it('starts the workitem immediately through the existing scheduled-start endpoint', async () => {
+    const user = userEvent.setup();
+    const requests: string[] = [];
+    const calls: { id: string; body: unknown }[] = [];
+    useWorkitemHandler([PENDING_ITEM], requests);
+    useScheduledStartHandler(calls);
+
+    renderPanel();
+    await user.click(await screen.findByRole('button', { name: '立即启动 #1' }));
+
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0].body).toEqual({ executeNow: true });
+  });
+
+  it('reschedules to the already planned future time without touching the date picker', async () => {
+    const user = userEvent.setup();
+    const requests: string[] = [];
+    const calls: { id: string; body: unknown }[] = [];
+    useWorkitemHandler([PENDING_ITEM], requests);
+    useScheduledStartHandler(calls);
+
+    renderPanel();
+    await user.click(await screen.findByRole('button', { name: '修改时间 #1' }));
+    await user.click(await screen.findByRole('button', { name: /保\s*存/ }));
+
+    await waitFor(() => expect(calls).toHaveLength(1));
+    const body = calls[0].body as { scheduledStartAt?: string };
+    expect(typeof body.scheduledStartAt).toBe('string');
+    expect(new Date(body.scheduledStartAt!).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('warns instead of calling the api when the planned time is already in the past', async () => {
+    const user = userEvent.setup();
+    const requests: string[] = [];
+    const calls: { id: string; body: unknown }[] = [];
+    useWorkitemHandler([{ ...PENDING_ITEM, scheduledStartAt: PAST }], requests);
+    useScheduledStartHandler(calls);
+
+    renderPanel();
+    await user.click(await screen.findByRole('button', { name: '修改时间 #1' }));
+    await user.click(await screen.findByRole('button', { name: /保\s*存/ }));
+
+    await waitFor(() => expect(warnings).toEqual(['计划执行时间必须是将来的时间点']));
+    expect(calls).toHaveLength(0);
+  });
+
+  it('opens the existing workitem detail page from 查看', async () => {
+    const user = userEvent.setup();
+    const requests: string[] = [];
+    useWorkitemHandler([PENDING_ITEM], requests);
+
+    renderPanel();
+    await user.click(await screen.findByRole('button', { name: '查看 #1' }));
+
+    expect(await screen.findByText('工作项详情页')).toBeInTheDocument();
+  });
+
+  it('refuses to cancel the schedule for read-only members without calling the api', async () => {
+    const user = userEvent.setup();
+    useAuthStore.setState({ accessLevel: 'READ_ONLY' });
+    const requests: string[] = [];
+    const calls: { id: string; body: unknown }[] = [];
+    useWorkitemHandler([PENDING_ITEM], requests);
+    useScheduledStartHandler(calls);
+    const errorSpy = vi.spyOn(message, 'error').mockImplementation(() => undefined as never);
+
+    renderPanel();
+    await user.click(await screen.findByRole('button', { name: '取消定时 #1' }));
+
+    await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('当前为只读权限，取消工作项定时执行需要读写权限'));
+    expect(calls).toHaveLength(0);
+    errorSpy.mockRestore();
+  });
+});
+
+it('switches an open workitem schedule modal and saves the same ISO value', async () => {
+  const calls: { id: string; body: unknown }[] = [];
+  useAuthStore.setState({ accessLevel: 'READ_WRITE' });
+  useWorkitemHandler([PENDING_ITEM, DONE_ITEM], []);
+  useScheduledStartHandler(calls);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const router = createMemoryRouter([{ path: '/', element: <ScheduledWorkitemsPanel /> }]);
+  render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: '修改时间 #1' }));
+  const input = within(screen.getByRole('dialog')).getByRole('textbox');
+  const value = (input as HTMLInputElement).value;
+  await act(() => i18n.changeLanguage('en-US'));
+  expect(screen.getByRole('dialog')).toHaveAccessibleName('Edit scheduled start time');
+  expect(within(screen.getByRole('dialog')).getByRole('textbox')).toBe(input);
+  expect(input).toHaveValue(value);
+  expect(screen.getByText(/Queued|排队中|已发布/)).toBeInTheDocument();
+  expect(screen.getByText('已发布')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'View #2' })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(calls[0]?.body).toEqual({ scheduledStartAt: FUTURE }));
+  await act(() => i18n.changeLanguage('zh-CN'));
+});
+
+resetAfterEach(async () => { await act(() => i18n.changeLanguage('zh-CN')); });
+
+it('reports a past scheduled time in the switched language without submitting it', async () => {
+  useAuthStore.setState({ accessLevel: 'READ_WRITE' });
+  const calls: { id: string; body: unknown }[] = [];
+  useWorkitemHandler([{ ...PENDING_ITEM, scheduledStartAt: PAST }], []);
+  useScheduledStartHandler(calls);
+  const warning = vi.spyOn(message, 'warning').mockImplementation(() => undefined as never);
+  renderPanel();
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: '修改时间 #1' }));
+  await act(() => i18n.changeLanguage('en-US'));
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+  expect(warning).toHaveBeenCalledWith('The scheduled start time must be in the future.');
+  expect(calls).toHaveLength(0);
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  warning.mockRestore();
+});
+
+it.each(['zh-CN', 'en-US'])('final widget scheduled workitem clear preserves keyboard search and resets page in %s', async locale => {
+ const requests: string[] = []; useWorkitemHandler([], requests);
+ await i18n.changeLanguage(locale); renderPanel();
+ const input = screen.getByLabelText(locale === 'en-US' ? 'Work item title filter' : '工作项标题筛选');
+ expect(screen.getByRole('button', { name: locale === 'en-US' ? 'Search' : '搜索' })).toBeEnabled();
+ await userEvent.type(input, '<raw>中文{Enter}');
+ await waitFor(() => expect(new URLSearchParams(requests.at(-1)).get('keyword')).toBe('<raw>中文'));
+ await userEvent.click(screen.getByRole('button', { name: locale === 'en-US' ? 'Clear scheduled work item search' : '清空定时工作项搜索' }));
+ expect(input).toHaveValue(''); await waitFor(() => expect(new URLSearchParams(requests.at(-1)).has('keyword')).toBe(false));
+ expect(new URLSearchParams(requests.at(-1)).get('page')).toBe('1');
+});

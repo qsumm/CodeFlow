@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ainative"
+version = "0.1.0"
+description = "AINative 开源执行器运行时:多步 SDLC 执行、任意 Anthropic 兼容模型接入、全链路可审计"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "qsumm" }]
+dependencies = []  # 纯标准库,按 00 号规范 NFR-1
+
+[project.scripts]
+ainative = "runtime.daemon:main"
+
+[tool.setuptools.packages.find]
+include = ["runtime*"]

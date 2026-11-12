@@ -1,0 +1,174 @@
+{
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "delete": "Delete",
+    "edit": "Edit",
+    "back": "Back"
+  },
+  "page": {
+    "title": "Memory",
+    "create": "New memory",
+    "loadError": "Could not load the memory catalog — refresh and retry",
+    "owners": "Owners",
+    "noOwners": "No owners available",
+    "selectOwner": "Pick an owner first",
+    "noWritableMemory": "Nothing here yet — start with \"New memory\"",
+    "noReadableMemory": "No readable memories",
+    "revision": "rev {{revision}}",
+    "topics": "Entries ({{count}})",
+    "index": "Index",
+    "editIndex": "Edit index",
+    "indexHint": "Lists which memories exist and when to consult them; bodies live in the entries below.",
+    "noTopics": "No entries yet",
+    "history": "History",
+    "noHistory": "No changes yet",
+    "acl": "Access grants",
+    "imports": "Local files",
+    "agentImports": "Local files belong to individual agent memories — pick an agent to view them.",
+    "deleteConfirm": "Delete this memory and its index references?"
+  },
+  "commands": {
+    "saveMemory": "Save memory",
+    "saveIndex": "Save index",
+    "deleteMemory": "Delete memory"
+  },
+  "messages": {
+    "memorySaved": "Memory saved",
+    "indexSaved": "Index saved"
+  },
+  "scope": {
+    "ORG": "Org shared",
+    "SQUAD": "Squad shared",
+    "AGENT": "Agent private"
+  },
+  "owner": {
+    "organization": "Org shared area",
+    "description": "{{squads}}{{scope}}{{ownerRef}}",
+    "option": "{{squads}}{{name}}",
+    "squadSeparator": ", "
+  },
+  "types": {
+    "user": "User preferences",
+    "feedback": "Feedback & conventions",
+    "project": "Project context",
+    "reference": "Reference"
+  },
+  "migration": {
+    "summary": "Legacy migration · {{migrated}} · {{pending}}",
+    "hint": "Migration and retries continue in the background and originals are kept. These numbers track migration progress only, not index capacity.",
+    "migrated_one": "{{count}} migrated",
+    "migrated_other": "{{count}} migrated",
+    "pending_one": "{{count}} queued",
+    "pending_other": "{{count}} queued"
+  },
+  "document": {
+    "version": "v{{version}}",
+    "metadataParseWarning": "Metadata could not be parsed; see the file detail for the raw text",
+    "summary": "{{description}} · {{bytes}} · {{version}}",
+    "viewer": "{{path}} · v{{version}}"
+  },
+  "operations": {
+    "CREATE": "Created",
+    "UPDATE": "Updated",
+    "DELETE": "Deleted"
+  },
+  "topic": {
+    "edit": "Edit memory",
+    "hint": "The owner decides who may use it; saving maintains body and index automatically — no review needed.",
+    "scope": "Owner scope",
+    "owner": "Owner",
+    "type": "Type",
+    "title": "Title",
+    "description": "When to use",
+    "body": "Body",
+    "descriptionPlaceholder": "Which tasks or situations should read this"
+  },
+  "validation": {
+    "scope": "Pick a scope",
+    "owner": "Pick an owner",
+    "type": "Pick a type",
+    "title": "Enter a title",
+    "description": "Describe when it applies",
+    "body": "Enter the body",
+    "path": "Enter a path",
+    "content": "Enter content",
+    "safePath": "Use a safe relative Markdown path",
+    "subjectType": "Pick a grantee",
+    "subjectRef": "Enter the subject ID",
+    "permission": "Pick allowed operations"
+  },
+  "editor": {
+    "edit": "Edit memory document",
+    "create": "New memory document",
+    "readOnly": "This store is read-only",
+    "limitWarning": "MEMORY.md exceeds 200 lines / 25,000 bytes; saving still works but sessions load only the prefix",
+    "path": "Path",
+    "pathExample": "feedback_testing.md",
+    "content": "Content"
+  },
+  "acl": {
+    "subjects": {
+      "USER": "Platform user",
+      "AGENT": "Agent",
+      "SQUAD": "Squad members",
+      "ROLE": "All agents"
+    },
+    "permissions": {
+      "READ": "View",
+      "WRITE": "Edit",
+      "ADMIN": "Manage"
+    },
+    "adminOnly": "Only Workspace administrators can manage access permissions",
+    "setCommand": "Configure access grants",
+    "removeCommand": "Revoke access grants",
+    "hint": "Grants decide who can view and edit this memory.",
+    "help": "Organization shared memory is readable by Agents in this Workspace by default; Squad shared memory is readable by its members. Agents can edit only their own personal memory, cannot edit shared memory, and cannot access other Agents’ personal memory. Platform users may receive separate edit permissions.",
+    "add": "Add a grant",
+    "empty": "No extra grants; workspace admins can always manage, agents can always write their own private memories",
+    "deleteConfirm": "Revoke this grant?",
+    "create": "New grant",
+    "subjectType": "Grantee",
+    "subjectRef": "Subject ID",
+    "subjectHelp": "Enter a user, Agent or Squad ID, such as Agent 40013. For all Agents, enter ALL_AGENTS.",
+    "subjectPlaceholder": "e.g. 40013",
+    "permission": "Allowed operations",
+    "permissionHelp": "View=read; Edit=create/update/delete; Admin=includes edit. Agents still write only their own private memories."
+  },
+  "import": {
+    "resume": "Resume",
+    "pause": "Pause",
+    "recurate": "Re-curate",
+    "retire": "Retire",
+    "retireConfirm": "Retiring stops future imports from this source — confirm?",
+    "status": {
+      "MISSING": "Local file missing",
+      "ACTIVE": "Importable",
+      "PAUSED": "Paused",
+      "RETIRED": "Retired",
+      "RECURATE_REQUESTED": "Re-curation pending",
+      "STALE": "Not checked recently",
+      "TOO_LARGE": "File too large"
+    },
+    "adminOnly": "Only Workspace administrators can manage local memory sources",
+    "hint": "Local sources are legacy Qoder/QoderCN files — a separate channel from the legacy migration above.",
+    "help": "A missing local file does not mean the platform memory is gone: it may not exist yet, have moved, or not be a readable plain file. Imported memories are never deleted because of this.",
+    "empty": "No importable local files",
+    "summary": "Agent #{{agentId}} · {{imports}} · last checked {{date}}",
+    "title": "Local file import",
+    "successCount_one": "{{count}} successful import in recent records",
+    "successCount_other": "{{count}} successful imports recently",
+    "missingCount_one": "Local file not found ({{count}})",
+    "missingCount_other": "Local files missing ({{count}})"
+  },
+  "counts": {
+    "total_one": "{{count}} item in total",
+    "total_other": "{{count}} items",
+    "bytes_one": "{{value}} byte",
+    "bytes_other": "{{value}} bytes",
+    "lines_one": "{{value}} line",
+    "lines_other": "{{value}} lines",
+    "measurements": "{{lines}} · {{bytes}}"
+  }
+}

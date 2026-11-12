@@ -1,0 +1,463 @@
+/* 工作台骨架:左树 + 顶栏 + 状态栏(设计契约 v5) */
+.wb-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-width: 0;
+  background: var(--cf-bg);
+}
+
+/* ── 顶栏 ── */
+.wb-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 44px;
+  padding: 0 12px;
+  background: var(--cf-sidebar);
+  border-bottom: 1px solid var(--cf-border);
+  flex-shrink: 0;
+}
+.wb-top .cf-brand-link { display: inline-flex; align-items: center; }
+.wb-path {
+  font-family: var(--cf-mono);
+  font-size: 11.5px;
+  color: var(--cf-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.wb-path b { color: var(--cf-text); font-weight: 500; }
+.wb-path .wb-path-sep { margin: 0 7px; opacity: .5; }
+.wb-path .wb-path-sep::before { content: '/'; }
+.wb-cmd {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 300px;
+  height: 28px;
+  background: var(--cf-field);
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius);
+  padding: 0 10px;
+  color: var(--cf-muted);
+  font-size: 11.5px;
+  font-family: var(--cf-mono);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.wb-cmd:hover { border-color: var(--cf-muted); color: var(--cf-text); }
+.wb-cmd kbd {
+  margin-left: auto;
+  font-family: var(--cf-mono);
+  font-size: 10px;
+  border: 1px solid var(--cf-border);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+.wb-top .spacer { flex: 1; }
+.wb-prj {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  color: var(--cf-text);
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius-sm);
+  background: transparent;
+  cursor: pointer;
+  max-width: 220px;
+}
+.wb-prj:hover { border-color: var(--cf-muted); }
+.wb-prj-mark {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--cf-accent);
+  opacity: .9;
+  flex-shrink: 0;
+}
+.wb-prj-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── 主体:树 + 内容 ── */
+.wb-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.wb-tree {
+  width: 216px;
+  flex: 0 0 216px;
+  background: var(--cf-sidebar);
+  border-right: 1px solid var(--cf-border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 10px;
+  font-size: 12px;
+}
+.wb-tree__proj {
+  padding: 13px 14px 11px;
+  border-bottom: 1px solid var(--cf-border);
+}
+.wb-tree__proj b {
+  font-size: 13px;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-tree__proj span {
+  color: var(--cf-muted);
+  font-size: 10.5px;
+  font-family: var(--cf-mono);
+  display: block;
+  margin-top: 3px;
+}
+.wb-tree__sec {
+  font-size: 10px;
+  letter-spacing: .16em;
+  color: var(--cf-muted);
+  padding: 13px 14px 5px;
+  font-family: var(--cf-mono);
+}
+.wb-tree__it {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 27px;
+  padding: 0 14px;
+  color: var(--cf-text);
+  cursor: pointer;
+  position: relative;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: 12px;
+}
+.wb-tree__it .anticon, .wb-tree__it svg { font-size: 13px; color: var(--cf-muted); flex-shrink: 0; }
+.wb-tree__it .wb-tree__n {
+  margin-left: auto;
+  font-family: var(--cf-mono);
+  font-size: 10.5px;
+  color: var(--cf-muted);
+}
+.wb-tree__it:hover { background: var(--cf-raised); }
+/* 当前页激活态(2026-11-11 视觉评审:与文档中心右目录的激活表达不同构,
+   且分组展开态与当前页用了同一底色,分不清"正在看的页")。
+   统一为:浅蓝底 + 左侧 2px 品牌蓝竖条 + 蓝字加粗。 */
+.wb-tree__it.on {
+  background: rgba(var(--cf-accent-rgb), .12);
+  color: var(--cf-accent-text);
+  font-weight: 600;
+}
+.wb-tree__it.on::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--cf-accent);
+}
+.wb-tree__it.on .anticon, .wb-tree__it.on svg { color: var(--cf-accent-text); }
+/* 分组标题只是展开态,不给底色,避免与当前页混淆 */
+.wb-tree__sec { background: transparent; }
+.wb-tree__bottom {
+  margin-top: auto;
+  border-top: 1px solid var(--cf-border);
+  padding-top: 6px;
+}
+.wb-tree__kbd {
+  margin-left: auto;
+  font-family: var(--cf-mono);
+  font-size: 9.5px;
+  color: var(--cf-muted);
+  border: 1px solid var(--cf-border);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+/* ── 状态栏 ── */
+.wb-status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 26px;
+  padding: 0 12px;
+  background: var(--cf-sidebar);
+  border-top: 1px solid var(--cf-border);
+  font-family: var(--cf-mono);
+  font-size: 10.5px;
+  color: var(--cf-muted);
+  flex-shrink: 0;
+}
+.wb-status .sp { flex: 1; }
+.wb-status .lit {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--cf-ok, #57c98b);
+  margin-right: 5px;
+  vertical-align: 1px;
+}
+.wb-status .lit--acc { background: var(--cf-accent); }
+.wb-status button.wb-status__cmd {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+}
+.wb-status button.wb-status__cmd:hover { color: var(--cf-text); }
+
+/* ── 命令面板 ── */
+.wb-palette-modal .ant-modal-content { padding: 12px; background: var(--cf-panel); border-radius: var(--cf-radius-xl); }
+.wb-palette-list { max-height: 320px; overflow-y: auto; margin-top: 6px; }
+.wb-palette-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--cf-radius-sm);
+  font-size: 12.5px;
+  cursor: pointer;
+  color: var(--cf-text);
+}
+.wb-palette-item .anticon, .wb-palette-item svg { color: var(--cf-muted); font-size: 13px; }
+.wb-palette-item .wb-palette__path {
+  margin-left: auto;
+  font-family: var(--cf-mono);
+  font-size: 10.5px;
+  color: var(--cf-muted);
+}
+.wb-palette-item:hover { background: var(--cf-raised); }
+.wb-palette-item.on { background: rgba(var(--cf-accent-rgb), .14); }
+.wb-palette-empty { padding: 18px 12px; color: var(--cf-muted); font-size: 12px; text-align: center; }
+
+@media (max-width: 900px) {
+  .wb-tree { display: none; }
+  .wb-cmd { width: 160px; }
+}
+
+/* ── 菜单图标按语义动效(2026-11-10,对齐 TestOPS「每个标志对应相关动作」) ──
+ * 触发 = hover 或选中(.on),一次性 0.55s,统一 back-ease(TestOPS 同款曲线)。
+ * 每个图标按自身语义动:文档写字、分支舒展、仪表盘指针摆、时钟走一格、
+ * 垃圾桶掀盖、折线上扬、齿轮转一格、闪电电击、机器人点头、书页翻动…
+ * 图标是 antd icon(.anticon > svg),对 svg 整体做 transform,origin 按语义设。 */
+@keyframes wb-ico-write { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-9deg) translateY(-1px); } 60% { transform: rotate(6deg); } }
+@keyframes wb-ico-sway { 0%,100% { transform: rotateX(0); } 40% { transform: rotateX(65deg); } }
+@keyframes wb-ico-needle { 0%,100% { transform: rotate(0); } 45% { transform: rotate(18deg); } 70% { transform: rotate(-6deg); } }
+@keyframes wb-ico-tick { 0%,100% { transform: rotate(0); } 45% { transform: rotate(28deg); } }
+@keyframes wb-ico-lid { 0%,100% { transform: rotate(0); } 45% { transform: rotate(-18deg) translateY(-1px); } }
+@keyframes wb-ico-rise { 0%,100% { transform: translateY(0); } 45% { transform: translateY(-3px); } }
+@keyframes wb-ico-stamp { 0% { transform: scale(1); } 40% { transform: scale(.88); } 75% { transform: scale(1.06); } }
+@keyframes wb-ico-turn { 0%,100% { transform: rotate(0); } 60% { transform: rotate(30deg); } }
+@keyframes wb-ico-zap { 0%,100% { transform: none; filter: none; } 30% { transform: scaleX(1.15) scaleY(.9); filter: brightness(1.5); } 55% { transform: scaleX(.92) scaleY(1.06); } }
+@keyframes wb-ico-nod { 0%,100% { transform: translateY(0); } 30% { transform: translateY(-2px); } 55% { transform: translateY(1px); } }
+@keyframes wb-ico-branch { 0%,100% { transform: rotate(0); } 40% { transform: rotate(8deg); } 70% { transform: rotate(-5deg); } }
+@keyframes wb-ico-flip { 0%,100% { transform: rotateY(0); } 50% { transform: rotateY(35deg); } }
+@keyframes wb-ico-glow { 0%,100% { filter: none; transform: none; } 40% { filter: brightness(1.55) drop-shadow(0 0 5px rgba(var(--cf-accent-rgb), .6)); transform: translateY(-1px); } }
+@keyframes wb-ico-hop { 0%,100% { transform: translateY(0); } 45% { transform: translateY(-3px); } }
+@keyframes wb-ico-plug { 0%,100% { transform: translateX(0); } 45% { transform: translateX(2px); } }
+@keyframes wb-ico-gather { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+@keyframes wb-ico-rewind { 0%,100% { transform: rotate(0); } 55% { transform: rotate(-22deg); } }
+@keyframes wb-ico-key { 0%,100% { transform: rotate(0); } 50% { transform: rotate(22deg); } }
+
+.wb-tree__it svg { will-change: transform; }
+.wb-tree__it[data-nav="/workitems"] svg { transform-origin: 70% 80%; }
+.wb-tree__it[data-nav="/workitems"]:hover .anticon > svg, .wb-tree__it[data-nav="/workitems"].on .anticon > svg,
+.wb-tree__it[data-nav="/workitems"]:hover > svg, .wb-tree__it[data-nav="/workitems"].on > svg { animation: wb-ico-write .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/sdlcs"] svg { transform-origin: 50% 100%; }
+.wb-tree__it[data-nav="/sdlcs"]:hover .anticon > svg, .wb-tree__it[data-nav="/sdlcs"].on .anticon > svg,
+.wb-tree__it[data-nav="/sdlcs"]:hover > svg, .wb-tree__it[data-nav="/sdlcs"].on > svg { animation: wb-ico-sway .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/overview"] svg { transform-origin: 50% 100%; }
+.wb-tree__it[data-nav="/overview"]:hover .anticon > svg, .wb-tree__it[data-nav="/overview"].on .anticon > svg,
+.wb-tree__it[data-nav="/overview"]:hover > svg, .wb-tree__it[data-nav="/overview"].on > svg { animation: wb-ico-needle .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/executions"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/executions"]:hover .anticon > svg, .wb-tree__it[data-nav="/executions"].on .anticon > svg,
+.wb-tree__it[data-nav="/executions"]:hover > svg, .wb-tree__it[data-nav="/executions"].on > svg { animation: wb-ico-tick .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/workitems/recycled"] svg { transform-origin: 15% 12%; }
+.wb-tree__it[data-nav="/workitems/recycled"]:hover .anticon > svg, .wb-tree__it[data-nav="/workitems/recycled"].on .anticon > svg,
+.wb-tree__it[data-nav="/workitems/recycled"]:hover > svg, .wb-tree__it[data-nav="/workitems/recycled"].on > svg { animation: wb-ico-lid .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/insights"] svg { transform-origin: 50% 100%; }
+.wb-tree__it[data-nav="/insights"]:hover .anticon > svg, .wb-tree__it[data-nav="/insights"].on .anticon > svg,
+.wb-tree__it[data-nav="/insights"]:hover > svg, .wb-tree__it[data-nav="/insights"].on > svg { animation: wb-ico-rise .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/audit-logs"] svg { transform-origin: 50% 60%; }
+.wb-tree__it[data-nav="/audit-logs"]:hover .anticon > svg, .wb-tree__it[data-nav="/audit-logs"].on .anticon > svg,
+.wb-tree__it[data-nav="/audit-logs"]:hover > svg, .wb-tree__it[data-nav="/audit-logs"].on > svg { animation: wb-ico-stamp .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/scheduled-tasks"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/scheduled-tasks"]:hover .anticon > svg, .wb-tree__it[data-nav="/scheduled-tasks"].on .anticon > svg,
+.wb-tree__it[data-nav="/scheduled-tasks"]:hover > svg, .wb-tree__it[data-nav="/scheduled-tasks"].on > svg { animation: wb-ico-turn .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/executors"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/executors"]:hover .anticon > svg, .wb-tree__it[data-nav="/executors"].on .anticon > svg,
+.wb-tree__it[data-nav="/executors"]:hover > svg, .wb-tree__it[data-nav="/executors"].on > svg { animation: wb-ico-zap .5s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/agents"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/agents"]:hover .anticon > svg, .wb-tree__it[data-nav="/agents"].on .anticon > svg,
+.wb-tree__it[data-nav="/agents"]:hover > svg, .wb-tree__it[data-nav="/agents"].on > svg { animation: wb-ico-nod .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/repos"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/repos"]:hover .anticon > svg, .wb-tree__it[data-nav="/repos"].on .anticon > svg,
+.wb-tree__it[data-nav="/repos"]:hover > svg, .wb-tree__it[data-nav="/repos"].on > svg { animation: wb-ico-branch .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/memories"] svg { transform-origin: 12% 50%; }
+.wb-tree__it[data-nav="/memories"]:hover .anticon > svg, .wb-tree__it[data-nav="/memories"].on .anticon > svg,
+.wb-tree__it[data-nav="/memories"]:hover > svg, .wb-tree__it[data-nav="/memories"].on > svg { animation: wb-ico-flip .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/skills"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/skills"]:hover .anticon > svg, .wb-tree__it[data-nav="/skills"].on .anticon > svg,
+.wb-tree__it[data-nav="/skills"]:hover > svg, .wb-tree__it[data-nav="/skills"].on > svg { animation: wb-ico-glow .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/status-templates"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/status-templates"]:hover .anticon > svg, .wb-tree__it[data-nav="/status-templates"].on .anticon > svg,
+.wb-tree__it[data-nav="/status-templates"]:hover > svg, .wb-tree__it[data-nav="/status-templates"].on > svg { animation: wb-ico-hop .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/integrations"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/integrations"]:hover .anticon > svg, .wb-tree__it[data-nav="/integrations"].on .anticon > svg,
+.wb-tree__it[data-nav="/integrations"]:hover > svg, .wb-tree__it[data-nav="/integrations"].on > svg { animation: wb-ico-plug .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/settings/members"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/settings/members"]:hover .anticon > svg, .wb-tree__it[data-nav="/settings/members"].on .anticon > svg,
+.wb-tree__it[data-nav="/settings/members"]:hover > svg, .wb-tree__it[data-nav="/settings/members"].on > svg { animation: wb-ico-gather .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/settings/backups"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/settings/backups"]:hover .anticon > svg, .wb-tree__it[data-nav="/settings/backups"].on .anticon > svg,
+.wb-tree__it[data-nav="/settings/backups"]:hover > svg, .wb-tree__it[data-nav="/settings/backups"].on > svg { animation: wb-ico-rewind .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/settings/environment-variables"] svg { transform-origin: 30% 50%; }
+.wb-tree__it[data-nav="/settings/environment-variables"]:hover .anticon > svg, .wb-tree__it[data-nav="/settings/environment-variables"].on .anticon > svg,
+.wb-tree__it[data-nav="/settings/environment-variables"]:hover > svg, .wb-tree__it[data-nav="/settings/environment-variables"].on > svg { animation: wb-ico-key .55s cubic-bezier(.34,1.56,.64,1) 1; }
+/* 树底:文档中心翻页 / 设置齿轮转一格 / 关于罗盘指北 */
+.wb-tree__it[data-nav="/help"] svg { transform-origin: 12% 50%; }
+.wb-tree__it[data-nav="/help"]:hover .anticon > svg, .wb-tree__it[data-nav="/help"]:hover > svg { animation: wb-ico-flip .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/settings"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/settings"]:hover .anticon > svg, .wb-tree__it[data-nav="/settings"]:hover > svg { animation: wb-ico-turn .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/about"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/about"]:hover .anticon > svg, .wb-tree__it[data-nav="/about"]:hover > svg { animation: wb-ico-needle .55s cubic-bezier(.34,1.56,.64,1) 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wb-tree__it .anticon > svg, .wb-tree__it > svg { animation: none !important; }
+}
+
+/* 顶栏右侧功能簇统一 28px 方钮:通知/主题工作台/用户头像同高,节奏一致 */
+.wb-top .appearance-switch,
+.wb-top .cf-user-avatar {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 900px) {
+  .wb-tree { display: none; }
+  .wb-cmd { width: 160px; }
+}
+
+/* ── 菜单图标按语义动效(2026-11-10,对齐 TestOPS「每个标志对应相关动作」) ──
+ * 触发 = hover 或选中(.on),一次性 0.55s,统一 back-ease(TestOPS 同款曲线)。
+ * 每个图标按自身语义动:文档写字、分支舒展、仪表盘指针摆、时钟走一格、
+ * 垃圾桶掀盖、折线上扬、齿轮转一格、闪电电击、机器人点头、书页翻动…
+ * 图标是 antd icon(.anticon > svg),对 svg 整体做 transform,origin 按语义设。 */
+@keyframes wb-ico-write { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-9deg) translateY(-1px); } 60% { transform: rotate(6deg); } }
+@keyframes wb-ico-sway { 0%,100% { transform: rotateX(0); } 40% { transform: rotateX(65deg); } }
+@keyframes wb-ico-needle { 0%,100% { transform: rotate(0); } 45% { transform: rotate(18deg); } 70% { transform: rotate(-6deg); } }
+@keyframes wb-ico-tick { 0%,100% { transform: rotate(0); } 45% { transform: rotate(28deg); } }
+@keyframes wb-ico-lid { 0%,100% { transform: rotate(0); } 45% { transform: rotate(-18deg) translateY(-1px); } }
+@keyframes wb-ico-rise { 0%,100% { transform: translateY(0); } 45% { transform: translateY(-3px); } }
+@keyframes wb-ico-stamp { 0% { transform: scale(1); } 40% { transform: scale(.88); } 75% { transform: scale(1.06); } }
+@keyframes wb-ico-turn { 0%,100% { transform: rotate(0); } 60% { transform: rotate(30deg); } }
+@keyframes wb-ico-zap { 0%,100% { transform: none; filter: none; } 30% { transform: scaleX(1.15) scaleY(.9); filter: brightness(1.5); } 55% { transform: scaleX(.92) scaleY(1.06); } }
+@keyframes wb-ico-nod { 0%,100% { transform: translateY(0); } 30% { transform: translateY(-2px); } 55% { transform: translateY(1px); } }
+@keyframes wb-ico-branch { 0%,100% { transform: rotate(0); } 40% { transform: rotate(8deg); } 70% { transform: rotate(-5deg); } }
+@keyframes wb-ico-flip { 0%,100% { transform: rotateY(0); } 50% { transform: rotateY(35deg); } }
+@keyframes wb-ico-glow { 0%,100% { filter: none; transform: none; } 40% { filter: brightness(1.55) drop-shadow(0 0 5px rgba(var(--cf-accent-rgb), .6)); transform: translateY(-1px); } }
+@keyframes wb-ico-hop { 0%,100% { transform: translateY(0); } 45% { transform: translateY(-3px); } }
+@keyframes wb-ico-plug { 0%,100% { transform: translateX(0); } 45% { transform: translateX(2px); } }
+@keyframes wb-ico-gather { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+@keyframes wb-ico-rewind { 0%,100% { transform: rotate(0); } 55% { transform: rotate(-22deg); } }
+@keyframes wb-ico-key { 0%,100% { transform: rotate(0); } 50% { transform: rotate(22deg); } }
+
+.wb-tree__it svg { will-change: transform; }
+.wb-tree__it[data-nav="/workitems"] svg { transform-origin: 70% 80%; }
+.wb-tree__it[data-nav="/workitems"]:hover .anticon > svg, .wb-tree__it[data-nav="/workitems"].on .anticon > svg,
+.wb-tree__it[data-nav="/workitems"]:hover > svg, .wb-tree__it[data-nav="/workitems"].on > svg { animation: wb-ico-write .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/sdlcs"] svg { transform-origin: 50% 100%; }
+.wb-tree__it[data-nav="/sdlcs"]:hover .anticon > svg, .wb-tree__it[data-nav="/sdlcs"].on .anticon > svg,
+.wb-tree__it[data-nav="/sdlcs"]:hover > svg, .wb-tree__it[data-nav="/sdlcs"].on > svg { animation: wb-ico-sway .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/overview"] svg { transform-origin: 50% 100%; }
+.wb-tree__it[data-nav="/overview"]:hover .anticon > svg, .wb-tree__it[data-nav="/overview"].on .anticon > svg,
+.wb-tree__it[data-nav="/overview"]:hover > svg, .wb-tree__it[data-nav="/overview"].on > svg { animation: wb-ico-needle .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/executions"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/executions"]:hover .anticon > svg, .wb-tree__it[data-nav="/executions"].on .anticon > svg,
+.wb-tree__it[data-nav="/executions"]:hover > svg, .wb-tree__it[data-nav="/executions"].on > svg { animation: wb-ico-tick .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/workitems/recycled"] svg { transform-origin: 15% 12%; }
+.wb-tree__it[data-nav="/workitems/recycled"]:hover .anticon > svg, .wb-tree__it[data-nav="/workitems/recycled"].on .anticon > svg,
+.wb-tree__it[data-nav="/workitems/recycled"]:hover > svg, .wb-tree__it[data-nav="/workitems/recycled"].on > svg { animation: wb-ico-lid .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/insights"] svg { transform-origin: 50% 100%; }
+.wb-tree__it[data-nav="/insights"]:hover .anticon > svg, .wb-tree__it[data-nav="/insights"].on .anticon > svg,
+.wb-tree__it[data-nav="/insights"]:hover > svg, .wb-tree__it[data-nav="/insights"].on > svg { animation: wb-ico-rise .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/audit-logs"] svg { transform-origin: 50% 60%; }
+.wb-tree__it[data-nav="/audit-logs"]:hover .anticon > svg, .wb-tree__it[data-nav="/audit-logs"].on .anticon > svg,
+.wb-tree__it[data-nav="/audit-logs"]:hover > svg, .wb-tree__it[data-nav="/audit-logs"].on > svg { animation: wb-ico-stamp .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/scheduled-tasks"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/scheduled-tasks"]:hover .anticon > svg, .wb-tree__it[data-nav="/scheduled-tasks"].on .anticon > svg,
+.wb-tree__it[data-nav="/scheduled-tasks"]:hover > svg, .wb-tree__it[data-nav="/scheduled-tasks"].on > svg { animation: wb-ico-turn .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/executors"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/executors"]:hover .anticon > svg, .wb-tree__it[data-nav="/executors"].on .anticon > svg,
+.wb-tree__it[data-nav="/executors"]:hover > svg, .wb-tree__it[data-nav="/executors"].on > svg { animation: wb-ico-zap .5s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/agents"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/agents"]:hover .anticon > svg, .wb-tree__it[data-nav="/agents"].on .anticon > svg,
+.wb-tree__it[data-nav="/agents"]:hover > svg, .wb-tree__it[data-nav="/agents"].on > svg { animation: wb-ico-nod .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/repos"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/repos"]:hover .anticon > svg, .wb-tree__it[data-nav="/repos"].on .anticon > svg,
+.wb-tree__it[data-nav="/repos"]:hover > svg, .wb-tree__it[data-nav="/repos"].on > svg { animation: wb-ico-branch .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/memories"] svg { transform-origin: 12% 50%; }
+.wb-tree__it[data-nav="/memories"]:hover .anticon > svg, .wb-tree__it[data-nav="/memories"].on .anticon > svg,
+.wb-tree__it[data-nav="/memories"]:hover > svg, .wb-tree__it[data-nav="/memories"].on > svg { animation: wb-ico-flip .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/skills"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/skills"]:hover .anticon > svg, .wb-tree__it[data-nav="/skills"].on .anticon > svg,
+.wb-tree__it[data-nav="/skills"]:hover > svg, .wb-tree__it[data-nav="/skills"].on > svg { animation: wb-ico-glow .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/status-templates"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/status-templates"]:hover .anticon > svg, .wb-tree__it[data-nav="/status-templates"].on .anticon > svg,
+.wb-tree__it[data-nav="/status-templates"]:hover > svg, .wb-tree__it[data-nav="/status-templates"].on > svg { animation: wb-ico-hop .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/integrations"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/integrations"]:hover .anticon > svg, .wb-tree__it[data-nav="/integrations"].on .anticon > svg,
+.wb-tree__it[data-nav="/integrations"]:hover > svg, .wb-tree__it[data-nav="/integrations"].on > svg { animation: wb-ico-plug .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/settings/members"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/settings/members"]:hover .anticon > svg, .wb-tree__it[data-nav="/settings/members"].on .anticon > svg,
+.wb-tree__it[data-nav="/settings/members"]:hover > svg, .wb-tree__it[data-nav="/settings/members"].on > svg { animation: wb-ico-gather .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/settings/backups"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/settings/backups"]:hover .anticon > svg, .wb-tree__it[data-nav="/settings/backups"].on .anticon > svg,
+.wb-tree__it[data-nav="/settings/backups"]:hover > svg, .wb-tree__it[data-nav="/settings/backups"].on > svg { animation: wb-ico-rewind .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/settings/environment-variables"] svg { transform-origin: 30% 50%; }
+.wb-tree__it[data-nav="/settings/environment-variables"]:hover .anticon > svg, .wb-tree__it[data-nav="/settings/environment-variables"].on .anticon > svg,
+.wb-tree__it[data-nav="/settings/environment-variables"]:hover > svg, .wb-tree__it[data-nav="/settings/environment-variables"].on > svg { animation: wb-ico-key .55s cubic-bezier(.34,1.56,.64,1) 1; }
+/* 树底:文档中心翻页 / 设置齿轮转一格 / 关于罗盘指北 */
+.wb-tree__it[data-nav="/help"] svg { transform-origin: 12% 50%; }
+.wb-tree__it[data-nav="/help"]:hover .anticon > svg, .wb-tree__it[data-nav="/help"]:hover > svg { animation: wb-ico-flip .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/settings"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/settings"]:hover .anticon > svg, .wb-tree__it[data-nav="/settings"]:hover > svg { animation: wb-ico-turn .55s cubic-bezier(.34,1.56,.64,1) 1; }
+.wb-tree__it[data-nav="/about"] svg { transform-origin: 50% 50%; }
+.wb-tree__it[data-nav="/about"]:hover .anticon > svg, .wb-tree__it[data-nav="/about"]:hover > svg { animation: wb-ico-needle .55s cubic-bezier(.34,1.56,.64,1) 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wb-tree__it .anticon > svg, .wb-tree__it > svg { animation: none !important; }
+}
+
+/* 顶栏右侧功能簇统一 28px 方钮:通知/主题工作台/用户头像同高,节奏一致 */
+.wb-top .appearance-switch,
+.wb-top .cf-user-avatar {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+

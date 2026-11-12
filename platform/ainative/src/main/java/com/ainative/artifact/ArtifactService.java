@@ -1,0 +1,249 @@
+package com.ainative.artifact;
+
+import com.ainative.artifact.dto.ArtifactVO;
+import com.ainative.artifact.dto.ReportArtifactRequest;
+import com.ainative.common.error.BizException;
+import com.ainative.common.error.ErrorCode;
+import com.ainative.dispatch.ExecutionSourceType;
+import com.ainative.storage.ObjectStorage;
+import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+@Service
+public class ArtifactService {
+
+    private static final int DOWNLOAD_TTL_SECONDS = 600;
+    private static final long MAX_PREVIEW_BYTES = 20L * 1024L * 1024L;
+
+    private final ArtifactDao artifactDao;
+    private final ObjectStorage storage;
+
+    public ArtifactService(ArtifactDao artifactDao, ObjectStorage storage) {
+        this.artifactDao = artifactDao;
+        this.storage = storage;
+    }
+
+    public Long record(ReportArtifactRequest req, long workspaceId) {
+        return record(req, workspaceId, new ArtifactOwnerRef(ExecutionSourceType.WORKITEM, req.getWorkitemId()));
+    }
+
+    public Long record(ReportArtifactRequest req, long workspaceId, ArtifactOwnerRef owner) {
+        // Immutable diagnostic retries may arrive after an accepted response was lost.
+        if (req.getDispatchId() != null && req.getName() != null
+                && req.getName().matches("observability/runtime/hooks/receipts/[a-f0-9]{64}\\.json")) {
+            for (ArtifactDO existing : artifactDao.listByDispatch(workspaceId, req.getDispatchId())) {
+                if (req.getName().equals(existing.getName()) && java.util.Objects.equals(req.getOssRef(), existing.getOssRef()))
+                    return existing.getId();
+            }
+        }
+        ArtifactDO a = new ArtifactDO();
+        a.setTenantId(workspaceId);
+        a.setSourceType(owner.sourceType().name());
+        a.setWorkitemId(owner.sourceId());
+        a.setDispatchId(req.getDispatchId());
+        a.setName(req.getName());
+        a.setType(ArtifactClassification.resolve(req.getType(), req.getName()));
+        a.setOssRef(req.getOssRef());
+        a.setSize(req.getSize());
+        a.setMetaJson(req.getMetaJson());
+        artifactDao.insert(a);
+        return a.getId();
+    }
+
+    public List<ArtifactVO> listByWorkitem(long workitemId, long workspaceId) {
+        return listByOwner(new ArtifactOwnerRef(ExecutionSourceType.WORKITEM, workitemId), workspaceId);
+    }
+
+    public List<ArtifactVO> listByOwner(ArtifactOwnerRef owner, long workspaceId) {
+        Map<String, ArtifactDO> latestByLogicalName = new LinkedHashMap<>();
+        List<ArtifactDO> artifacts = owner.sourceType() == ExecutionSourceType.WORKITEM
+                ? artifactDao.listByWorkitem(workspaceId, owner.sourceId())
+                : artifactDao.listBySource(workspaceId, owner.sourceType().name(), owner.sourceId(), null);
+        for (ArtifactDO a : artifacts) {
+            if (!isUserVisible(a)) {
+                continue;
+            }
+            // Deduplicate aliases only within one execution, retaining historical rounds.
+            latestByLogicalName.putIfAbsent(a.getDispatchId() + ":" + logicalName(a.getName()), a);
+        }
+        List<ArtifactVO> result = new ArrayList<>();
+        for (ArtifactDO artifact : latestByLogicalName.values()) {
+            result.add(toVO(artifact));
+        }
+        return result;
+    }
+
+    public List<ArtifactVO> listByDispatch(long dispatchId, long workspaceId) {
+        List<ArtifactVO> result = new ArrayList<>();
+        for (ArtifactDO a : artifactDao.listByDispatch(workspaceId, dispatchId)) {
+            if (isUserVisible(a)) {
+                result.add(toVO(a));
+            }
+        }
+        return result;
+    }
+
+    private boolean isUserVisible(ArtifactDO artifact) {
+        if (artifact == null) {
+            return false;
+        }
+        String name = artifact.getName();
+        return name == null || !(name.startsWith("observability/") || name.contains("/observability/"));
+    }
+
+    private String logicalName(String name) {
+        if (name == null) {
+            return "";
+        }
+        if (name.startsWith("artifacts/output/")) {
+            return name.substring("artifacts/output/".length());
+        }
+        if (name.startsWith("output/")) {
+            return name.substring("output/".length());
+        }
+        return name;
+    }
+
+    public String getDownloadUrl(long id, long workspaceId) {
+        ArtifactDO a = findByTenantAndId(id, workspaceId);
+        return storage.presignGet(a.getOssRef(), DOWNLOAD_TTL_SECONDS);
+    }
+
+    public String getDownloadUrl(long id, ArtifactOwnerRef owner, long workspaceId) {
+        ArtifactDO artifact = findOwnedArtifact(id, owner, workspaceId);
+        return storage.presignGet(artifact.getOssRef(), DOWNLOAD_TTL_SECONDS);
+    }
+
+    public PreviewContent getPreviewContent(long id, long workspaceId) {
+        ArtifactDO a = findByTenantAndId(id, workspaceId);
+        return preview(a);
+    }
+
+    public PreviewContent getPreviewContent(long id, ArtifactOwnerRef owner, long workspaceId) {
+        return preview(findOwnedArtifact(id, owner, workspaceId));
+    }
+
+    private ArtifactDO findOwnedArtifact(long id, ArtifactOwnerRef owner, long workspaceId) {
+        ArtifactDO artifact = owner.sourceType() == ExecutionSourceType.WORKITEM
+                ? artifactDao.findWorkitemByTenantAndId(workspaceId, id)
+                : artifactDao.findBySourceAndId(workspaceId, owner.sourceType().name(), owner.sourceId(), id);
+        if (artifact == null
+                || artifact.getWorkitemId() == null || artifact.getWorkitemId() != owner.sourceId()
+                || ExecutionSourceType.valueOrWorkitem(artifact.getSourceType()) != owner.sourceType()) {
+            throw new BizException(ErrorCode.ARTIFACT_NOT_FOUND);
+        }
+        return artifact;
+    }
+
+    private ArtifactDO findByTenantAndId(long id, long workspaceId) {
+        ArtifactDO a = artifactDao.findById(id);
+        if (a == null || a.getTenantId() == null || !a.getTenantId().equals(workspaceId)) {
+            throw new BizException(ErrorCode.ARTIFACT_NOT_FOUND);
+        }
+        return a;
+    }
+
+    private PreviewContent preview(ArtifactDO a) {
+        if (!isPreviewable(a.getName()) || a.getSize() == null || a.getSize() > MAX_PREVIEW_BYTES) {
+            throw new BizException(ErrorCode.PARAM_INVALID);
+        }
+        byte[] bytes = storage.get(a.getOssRef());
+        if (bytes == null) {
+            throw new BizException(ErrorCode.ARTIFACT_NOT_FOUND);
+        }
+        return new PreviewContent(a.getName(), bytes);
+    }
+
+    private boolean isPreviewable(String name) {
+        String ext = extension(name);
+        switch (ext) {
+            case "md":
+            case "markdown":
+            case "tsv":
+            case "yaml":
+            case "yml":
+            case "xml":
+            case "java":
+            case "py":
+            case "js":
+            case "jsx":
+            case "ts":
+            case "tsx":
+            case "css":
+            case "sh":
+            case "sql":
+            case "tf":
+            case "toml":
+            case "go":
+            case "rs":
+            case "txt":
+            case "log":
+            case "json":
+            case "jsonl":
+            case "csv":
+            case "html":
+            case "htm":
+            case "pdf":
+            case "png":
+            case "jpg":
+            case "jpeg":
+            case "gif":
+            case "webp":
+            case "mp4":
+            case "webm":
+            case "ogg":
+            case "ogv":
+            case "mov":
+            case "m4v":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private String extension(String name) {
+        if (name == null) {
+            return "";
+        }
+        int query = name.indexOf('?');
+        String clean = query >= 0 ? name.substring(0, query) : name;
+        int hash = clean.indexOf('#');
+        clean = hash >= 0 ? clean.substring(0, hash) : clean;
+        int dot = clean.lastIndexOf('.');
+        return dot >= 0 ? clean.substring(dot + 1).toLowerCase() : "";
+    }
+
+    private ArtifactVO toVO(ArtifactDO a) {
+        ArtifactVO vo = new ArtifactVO();
+        vo.setId(a.getId());
+        vo.setWorkitemId(a.getWorkitemId());
+        vo.setDispatchId(a.getDispatchId());
+        vo.setName(a.getName());
+        vo.setType(ArtifactClassification.resolve(a.getType(), a.getName()));
+        vo.setSize(a.getSize());
+        vo.setGmtCreate(a.getGmtCreate());
+        return vo;
+    }
+
+    public static class PreviewContent {
+        private final String name;
+        private final byte[] bytes;
+
+        public PreviewContent(String name, byte[] bytes) {
+            this.name = name;
+            this.bytes = bytes;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public byte[] getBytes() {
+            return bytes;
+        }
+    }
+}

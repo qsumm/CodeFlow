@@ -1,0 +1,350 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { http, HttpResponse } from 'msw';
+import { server } from '@/test/mocks/server';
+import { useAuthStore } from '@/shared/auth/store';
+import { createAppRoutes } from '@/app/router';
+import { EnvironmentVariablesPage } from './EnvironmentVariablesPage';
+
+const ok = (data: unknown) => HttpResponse.json({ success: true, code: '0', message: '', data });
+const variables = [
+  { id: 11, name: 'API_TOKEN', value: '**', description: '部署令牌', gmtCreate: '2026-09-16T10:00:00Z', gmtModified: '2026-09-17T10:00:00Z', version: 0 },
+  { id: 12, name: 'EMPTY_SECRET', value: '**', description: null, gmtCreate: '2026-09-16T10:00:00Z', gmtModified: '2026-09-17T11:00:00Z', version: 1 },
+];
+
+function renderPage(client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })) {
+  return {
+    client,
+    ...render(
+      <QueryClientProvider client={client}>
+        <EnvironmentVariablesPage />
+      </QueryClientProvider>,
+    ),
+  };
+}
+
+function expectNoSecretCache(client: QueryClient, secret: string) {
+  expect(client.getMutationCache().getAll()).toHaveLength(0);
+  const queryData = client.getQueryCache().findAll().map((query) => query.state.data);
+  expect(JSON.stringify(queryData)).not.toContain(secret);
+}
+
+describe('EnvironmentVariablesPage', () => {
+  beforeEach(() => {
+    useAuthStore.getState().clear();
+    useAuthStore.getState().setCurrentWorkspace({ id: 1, name: 'project', description: '' }, 'ADMIN');
+    server.use(http.get('/api/environment-variables', () => ok(variables)));
+  });
+
+  it('registers the settings route', () => {
+    const paths = createAppRoutes().flatMap((route) => [route.path, ...(route.children ?? []).map((child) => child.path)]);
+    expect(paths).toContain('/settings/environment-variables');
+  });
+
+  it('shows a loading state and a friendly empty state', async () => {
+    let release: (() => void) | undefined;
+    server.use(http.get('/api/environment-variables', async () => {
+      await new Promise<void>((resolve) => { release = resolve; });
+      return ok([]);
+    }));
+
+    const view = renderPage();
+    expect(view.container.querySelector('.ant-spin-spinning')).toBeInTheDocument();
+    await waitFor(() => expect(release).toBeTypeOf('function'));
+    act(() => release?.());
+    expect(await screen.findByText('还没有变量')).toBeInTheDocument();
+  });
+
+  it('masks every value and never requests plaintext', async () => {
+    const valueEndpoint = vi.fn(() => ok({ value: 'must-not-fetch' }));
+    server.use(http.get('/api/environment-variables/:id/value', valueEndpoint));
+
+    renderPage();
+    const tokenRow = await screen.findByRole('row', { name: /API_TOKEN/ });
+    const emptyRow = screen.getByRole('row', { name: /EMPTY_SECRET/ });
+    expect(within(tokenRow).getByText('**')).toBeInTheDocument();
+    expect(within(emptyRow).getByText('**')).toBeInTheDocument();
+    expect(within(tokenRow).queryByRole('button', { name: /API_TOKEN 的值/ })).not.toBeInTheDocument();
+    expect(within(emptyRow).queryByRole('button', { name: /EMPTY_SECRET 的值/ })).not.toBeInTheDocument();
+    expect(valueEndpoint).not.toHaveBeenCalled();
+  });
+
+  it('allows an admin to create a variable with an explicitly present empty value', async () => {
+    let body: Record<string, unknown> | undefined;
+    server.use(http.post('/api/environment-variables', async ({ request }) => {
+      body = await request.json() as Record<string, unknown>;
+      return ok({ ...variables[0], id: 13, name: body.name, description: body.description });
+    }));
+    const { client } = renderPage();
+    await screen.findByText('API_TOKEN');
+    await userEvent.click(screen.getByRole('button', { name: '加变量' }));
+    await userEvent.type(screen.getByLabelText('名称'), 'NEW_KEY');
+    expect(screen.getByLabelText('值')).toHaveValue('');
+    await userEvent.type(screen.getByLabelText('说明'), '新密钥');
+    await userEvent.click(screen.getByRole('button', { name: '创建' }));
+    await waitFor(() => expect(body).toEqual({ name: 'NEW_KEY', value: '', description: '新密钥' }));
+    expectNoSecretCache(client, 'new-secret');
+  });
+
+  it('edits metadata without fetching plaintext and sends updateValue false', async () => {
+    const valueEndpoint = vi.fn(() => ok({ value: 'must-not-fetch' }));
+    let body: Record<string, unknown> | undefined;
+    server.use(
+      http.get('/api/environment-variables/:id/value', valueEndpoint),
+      http.put('/api/environment-variables/11', async ({ request }) => {
+        body = await request.json() as Record<string, unknown>;
+        return ok(variables[0]);
+      }),
+    );
+    renderPage();
+    const row = await screen.findByRole('row', { name: /API_TOKEN/ });
+    await userEvent.click(within(row).getByRole('button', { name: '改 API_TOKEN' }));
+    expect(screen.getByLabelText('名称')).toHaveValue('API_TOKEN');
+    expect(screen.getByLabelText('说明')).toHaveValue('部署令牌');
+    expect(screen.queryByLabelText('新值')).not.toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText('说明'));
+    await userEvent.type(screen.getByLabelText('说明'), '只改说明');
+    await userEvent.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() => expect(body).toEqual({ name: 'API_TOKEN', description: '只改说明', updateValue: false }));
+    expect(valueEndpoint).not.toHaveBeenCalled();
+  });
+
+  it('sends updateValue true with the replacement only after explicit selection', async () => {
+    let body: Record<string, unknown> | undefined;
+    server.use(http.put('/api/environment-variables/11', async ({ request }) => {
+      body = await request.json() as Record<string, unknown>;
+      return ok(variables[0]);
+    }));
+    const { client } = renderPage();
+    const row = await screen.findByRole('row', { name: /API_TOKEN/ });
+    await userEvent.click(within(row).getByRole('button', { name: '改 API_TOKEN' }));
+    await userEvent.click(await screen.findByRole('checkbox', { name: '覆盖现有值' }));
+    expect(await screen.findByLabelText('新值')).toHaveValue('');
+    await userEvent.type(screen.getByLabelText('新值'), 'replacement');
+    await userEvent.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() => expect(body).toEqual({ name: 'API_TOKEN', description: '部署令牌', updateValue: true, value: 'replacement' }));
+    expectNoSecretCache(client, 'replacement');
+  });
+
+  it('keeps create errors inside the dialog without caching the submitted value', async () => {
+    server.use(http.post('/api/environment-variables', () => HttpResponse.json({
+      success: false,
+      code: '33003',
+      message: '该名称为平台保留名称',
+      data: null,
+    })));
+    const { client } = renderPage();
+    await screen.findByText('API_TOKEN');
+    await userEvent.click(screen.getByRole('button', { name: '加变量' }));
+    await userEvent.type(await screen.findByLabelText('名称'), 'AINATIVE_TOKEN');
+    await userEvent.type(await screen.findByLabelText('值'), 'create-sensitive-input');
+    await userEvent.click(screen.getByRole('button', { name: '创建' }));
+
+    const dialog = await screen.findByRole('dialog', { name: '加变量' });
+    expect(await within(dialog).findByText('该名称为平台保留名称')).toBeInTheDocument();
+    expect(screen.getByLabelText('值')).toHaveValue('create-sensitive-input');
+    expectNoSecretCache(client, 'create-sensitive-input');
+  }, 15_000);
+
+  it('keeps update errors inside the dialog without caching the replacement value', async () => {
+    server.use(http.put('/api/environment-variables/11', () => HttpResponse.json({
+      success: false,
+      code: '33006',
+      message: '环境变量已被修改，请重试',
+      data: null,
+    })));
+    const { client } = renderPage();
+    const row = await screen.findByRole('row', { name: /API_TOKEN/ });
+    await userEvent.click(within(row).getByRole('button', { name: '改 API_TOKEN' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: '覆盖现有值' }));
+    await userEvent.type(screen.getByLabelText('新值'), 'replacement-sensitive-input');
+    await userEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    const dialog = await screen.findByRole('dialog', { name: '改变量' });
+    expect(await within(dialog).findByText('环境变量已被修改，请重试')).toBeInTheDocument();
+    expect(screen.getByLabelText('新值')).toHaveValue('replacement-sensitive-input');
+    expectNoSecretCache(client, 'replacement-sensitive-input');
+  });
+
+  it.each(['READ_WRITE', 'READ_ONLY'] as const)('keeps %s members read-only without exposing values', async (level) => {
+    useAuthStore.getState().setAccessLevel(level);
+    const valueEndpoint = vi.fn(() => ok({ value: 'must-not-load' }));
+    server.use(http.get('/api/environment-variables/11/value', valueEndpoint));
+    renderPage();
+    const row = await screen.findByRole('row', { name: /API_TOKEN/ });
+    expect(screen.queryByRole('button', { name: '加变量' })).not.toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: '改 API_TOKEN' })).not.toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: '删 API_TOKEN' })).not.toBeInTheDocument();
+    expect(within(row).getByText('**')).toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: /API_TOKEN 的值/ })).not.toBeInTheDocument();
+    expect(valueEndpoint).not.toHaveBeenCalled();
+  });
+
+  it('confirms deletion and surfaces the backend reference detail', async () => {
+    server.use(http.delete('/api/environment-variables/11', () => HttpResponse.json({
+      success: false,
+      code: '33005',
+      message: '环境变量仍被AI 成员引用,无法删除:发布助手(#9) 在线版本 v3。请先解除挂载。',
+      data: null,
+    })));
+    renderPage();
+    const row = await screen.findByRole('row', { name: /API_TOKEN/ });
+    await userEvent.click(within(row).getByRole('button', { name: '删 API_TOKEN' }));
+    expect(screen.getByText('删掉变量 API_TOKEN?')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '确认删除' }));
+    expect(await screen.findByText(/发布助手\(#9\) 在线版本 v3/)).toBeInTheDocument();
+  });
+
+  it.each(['create', 'edit'] as const)('closes and clears an open %s form when the workspace changes', async (mode) => {
+    const create = vi.fn(() => ok(variables[0]));
+    const update = vi.fn(() => ok(variables[0]));
+    server.use(
+      http.post('/api/environment-variables', create),
+      http.put('/api/environment-variables/11', update),
+    );
+    renderPage();
+    const row = await screen.findByRole('row', { name: /API_TOKEN/ });
+    if (mode === 'create') {
+      await userEvent.click(screen.getByRole('button', { name: '加变量' }));
+      await userEvent.type(screen.getByLabelText('名称'), 'WORKSPACE_A_KEY');
+      await userEvent.type(screen.getByLabelText('值'), 'workspace-a-secret');
+    } else {
+      await userEvent.click(within(row).getByRole('button', { name: '改 API_TOKEN' }));
+      await userEvent.click(screen.getByRole('checkbox', { name: '覆盖现有值' }));
+      await userEvent.type(screen.getByLabelText('新值'), 'workspace-a-secret');
+    }
+    const staleSubmit = screen.getByRole('button', { name: mode === 'create' ? '创建' : '保存' });
+
+    act(() => useAuthStore.getState().setCurrentWorkspace({ id: 2, name: 'other', description: '' }, 'ADMIN'));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.queryByDisplayValue('workspace-a-secret')).not.toBeInTheDocument();
+    staleSubmit.click();
+    await waitFor(() => {
+      expect(create).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: '加变量' }));
+    expect(screen.getByLabelText('值')).toHaveValue('');
+  });
+
+  it.each(['READ_WRITE', 'READ_ONLY'] as const)('closes a sensitive form and blocks stale submission after access changes to %s', async (level) => {
+    const update = vi.fn(() => ok(variables[0]));
+    server.use(http.put('/api/environment-variables/11', update));
+    renderPage();
+    const row = await screen.findByRole('row', { name: /API_TOKEN/ });
+    await userEvent.click(within(row).getByRole('button', { name: '改 API_TOKEN' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: '覆盖现有值' }));
+    await userEvent.type(screen.getByLabelText('新值'), 'admin-only-secret');
+    const staleSave = screen.getByRole('button', { name: '保存' });
+
+    act(() => useAuthStore.getState().setAccessLevel(level));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.queryByDisplayValue('admin-only-secret')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '加变量' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /编辑 API_TOKEN/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /删除 API_TOKEN/ })).not.toBeInTheDocument();
+    staleSave.click();
+    await waitFor(() => expect(update).not.toHaveBeenCalled());
+  });
+
+  it('does not let late create success close or reset a form opened in the new workspace', async () => {
+    let finish: ((response: Response) => void) | undefined;
+    server.use(http.post('/api/environment-variables', async () =>
+      new Promise<Response>((resolve) => { finish = resolve; })));
+    renderPage();
+    await screen.findByText('API_TOKEN');
+    await userEvent.click(screen.getByRole('button', { name: '加变量' }));
+    await userEvent.type(screen.getByLabelText('名称'), 'WORKSPACE_A_KEY');
+    await userEvent.type(screen.getByLabelText('值'), 'workspace-a-secret');
+    await userEvent.click(screen.getByRole('button', { name: '创建' }));
+    await waitFor(() => expect(finish).toBeTypeOf('function'));
+
+    act(() => useAuthStore.getState().setCurrentWorkspace({ id: 2, name: 'other', description: '' }, 'ADMIN'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: '加变量' }));
+    await userEvent.type(screen.getByLabelText('名称'), 'WORKSPACE_B_KEY');
+    await userEvent.type(screen.getByLabelText('值'), 'workspace-b-secret');
+    expect(screen.getByRole('button', { name: '创建' })).toBeEnabled();
+    finish?.(ok(variables[0]));
+
+    await waitFor(() => expect(screen.getByRole('dialog', { name: '加变量' })).toBeInTheDocument());
+    expect(screen.getByLabelText('名称')).toHaveValue('WORKSPACE_B_KEY');
+    expect(screen.getByLabelText('值')).toHaveValue('workspace-b-secret');
+    expect(screen.getByRole('button', { name: '创建' })).toBeEnabled();
+    expect(screen.queryByText('变量已建')).not.toBeInTheDocument();
+  });
+
+  it('does not let a late edit failure affect a form opened after an access boundary', async () => {
+    let finish: ((response: Response) => void) | undefined;
+    server.use(http.put('/api/environment-variables/11', async () =>
+      new Promise<Response>((resolve) => { finish = resolve; })));
+    renderPage();
+    const row = await screen.findByRole('row', { name: /API_TOKEN/ });
+    await userEvent.click(within(row).getByRole('button', { name: '改 API_TOKEN' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: '覆盖现有值' }));
+    await userEvent.type(screen.getByLabelText('新值'), 'old-admin-secret');
+    await userEvent.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() => expect(finish).toBeTypeOf('function'));
+
+    act(() => useAuthStore.getState().setAccessLevel('READ_WRITE'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    act(() => useAuthStore.getState().setAccessLevel('ADMIN'));
+    await userEvent.click(screen.getByRole('button', { name: '加变量' }));
+    await userEvent.type(screen.getByLabelText('名称'), 'NEW_ADMIN_KEY');
+    expect(screen.getByRole('button', { name: '创建' })).toBeEnabled();
+    finish?.(HttpResponse.json({ success: false, code: '33006', message: '旧请求版本冲突', data: null }));
+
+    await waitFor(() => expect(screen.getByRole('dialog', { name: '加变量' })).toBeInTheDocument());
+    expect(screen.getByLabelText('名称')).toHaveValue('NEW_ADMIN_KEY');
+    expect(screen.queryByText('旧请求版本冲突')).not.toBeInTheDocument();
+  }, 15_000);
+
+  it('isolates late delete success from the new workspace state', async () => {
+    let finish: ((response: Response) => void) | undefined;
+    server.use(http.delete('/api/environment-variables/11', async () =>
+      new Promise<Response>((resolve) => { finish = resolve; })));
+    renderPage();
+    let row = await screen.findByRole('row', { name: /API_TOKEN/ });
+    await userEvent.click(within(row).getByRole('button', { name: '删 API_TOKEN' }));
+    await userEvent.click(screen.getByRole('button', { name: '确认删除' }));
+    await waitFor(() => expect(finish).toBeTypeOf('function'));
+
+    act(() => useAuthStore.getState().setCurrentWorkspace({ id: 2, name: 'other', description: '' }, 'ADMIN'));
+    row = await screen.findByRole('row', { name: /API_TOKEN/ });
+    expect(within(row).getByText('**')).toBeInTheDocument();
+    await userEvent.click(within(row).getByRole('button', { name: '删 API_TOKEN' }));
+    expect(screen.getByRole('button', { name: '确认删除' })).toBeEnabled();
+    await act(async () => { finish?.(ok(null)); });
+
+    await waitFor(() => expect(within(row).getByText('**')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: '确认删除' })).toBeEnabled();
+    expect(screen.queryByText('变量已删')).not.toBeInTheDocument();
+  }, 15_000);
+
+  it('isolates late delete failure after an access downgrade', async () => {
+    let finish: ((response: Response) => void) | undefined;
+    server.use(http.delete('/api/environment-variables/11', async () =>
+      new Promise<Response>((resolve) => { finish = resolve; })));
+    renderPage();
+    let row = await screen.findByRole('row', { name: /API_TOKEN/ });
+    await userEvent.click(within(row).getByRole('button', { name: '删 API_TOKEN' }));
+    await userEvent.click(screen.getByRole('button', { name: '确认删除' }));
+    await waitFor(() => expect(finish).toBeTypeOf('function'));
+
+    act(() => useAuthStore.getState().setAccessLevel('READ_ONLY'));
+    await waitFor(() => expect(screen.queryByRole('button', { name: '删 API_TOKEN' })).not.toBeInTheDocument());
+    act(() => useAuthStore.getState().setAccessLevel('ADMIN'));
+    row = await screen.findByRole('row', { name: /API_TOKEN/ });
+    await userEvent.click(within(row).getByRole('button', { name: '删 API_TOKEN' }));
+    expect(screen.getByRole('button', { name: '确认删除' })).toBeEnabled();
+    finish?.(HttpResponse.json({ success: false, code: '33005', message: '旧空间仍有引用', data: null }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '确认删除' })).toBeEnabled());
+    expect(screen.queryByText('旧空间仍有引用')).not.toBeInTheDocument();
+  }, 15_000);
+});

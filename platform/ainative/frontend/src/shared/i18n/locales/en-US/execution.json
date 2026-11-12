@@ -1,0 +1,53 @@
+{
+  "list": {
+    "title": "Execution ledger",
+    "refresh": "Refresh",
+    "time": "Time",
+    "workitem": "Work item",
+    "agent": "Member",
+    "executor": "Executor",
+    "status": "Status",
+    "attempt": "Attempt",
+    "actions": "Actions",
+    "details": "Details",
+    "allAgents": "All members",
+    "allStatuses": "All statuses",
+    "workitemId": "Work item ID",
+    "last7Days": "Last 7d",
+    "last30Days": "Last 30d",
+    "last90Days": "Last 90d",
+    "total_one": "{{total}} execution",
+    "total_other": "{{total}} records",
+    "empty": "No runs yet"
+  },
+  "detail": {
+    "title": "Run profile",
+    "titleWithId": "Run profile · #{{id}}",
+    "error": "Error",
+    "workitem": "Work item",
+    "step": "Pipeline step",
+    "agent": "Member",
+    "executor": "Executor",
+    "attempt": "Attempt",
+    "status": "Status",
+    "summary": "Result summary",
+    "artifacts_one": "{{total}} artifact",
+    "artifacts_other": "Artifacts ({{total}})",
+    "noArtifacts": "No artifacts",
+    "openWorkitem": "Open work item",
+    "viewAgent": "View member",
+    "close": "Close",
+    "loading": "Loading"
+  },
+  "status": {
+    "PENDING": "Queued",
+    "PACKAGING": "Packaging",
+    "DISPATCHED": "Dispatched",
+    "ACKED": "Acked",
+    "RUNNING": "Running",
+    "SUCCEEDED": "Succeeded",
+    "FAILED": "Failed",
+    "TIMEOUT": "Timed out",
+    "CANCELED": "Canceled"
+  }
+}

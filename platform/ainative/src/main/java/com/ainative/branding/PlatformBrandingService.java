@@ -1,0 +1,328 @@
+package com.ainative.branding;
+
+import com.ainative.branding.dto.LogoUploadVO;
+import com.ainative.branding.dto.PlatformBrandingVO;
+import com.ainative.branding.dto.UpdatePlatformBrandingRequest;
+import com.ainative.common.error.BizException;
+import com.ainative.common.error.ErrorCode;
+import com.ainative.storage.ObjectStorage;
+import com.ainative.storage.OssProperties;
+import com.ainative.storage.StoredObject;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.net.URI;
+import java.util.Map;
+import java.util.Set;
+
+@Service
+public class PlatformBrandingService {
+
+    public static final String DEFAULT_PLATFORM_NAME = "CodeFlow";
+    public static final String DEFAULT_THEME_KEY = "ocean-blue";
+    public static final String DEFAULT_PRIMARY_COLOR = "#2383e2";
+    public static final String DEFAULT_DEPLOYMENT_VERSION = "x.x.x";
+
+    private static final Set<String> THEME_KEYS = Set.of(
+            "ocean-blue", "jade-green", "indigo", "rose",
+            "cyan", "amber", "violet", "graphite", "teal");
+    private static final Map<String, String> LOGO_EXTENSIONS = Map.of(
+            "image/png", ".png",
+            "image/jpeg", ".jpg",
+            "image/webp", ".webp",
+            "image/svg+xml", ".svg",
+            "image/gif", ".gif",
+            "image/x-icon", ".ico",
+            "image/vnd.microsoft.icon", ".ico",
+            "image/avif", ".avif");
+    private static final long MAX_LOGO_SIZE = 512L * 1024L;
+    private static final long LOGO_CACHE_TTL_MS = 5 * 60 * 1000L;
+
+    private volatile LogoCacheEntry logoCache;
+
+    private final PlatformBrandingDao brandingDao;
+    private final ObjectStorage objectStorage;
+    private final String bucket;
+    private final String publicBaseUrl;
+    private final String recommendedRuntimeVersion;
+    private final String deploymentVersion;
+    private final boolean communityEdition;
+
+    public PlatformBrandingService(PlatformBrandingDao brandingDao,
+                                   ObjectStorage objectStorage,
+                                   OssProperties ossProperties,
+                                   @Value("${ainative.public-base-url:}") String publicBaseUrl,
+                                   @Value("${ainative.runtime.recommended-version:0.3.32}") String recommendedRuntimeVersion,
+                                   @Value("${ainative.version:x.x.x}") String deploymentVersion,
+                                   @Value("${ainative.community-edition:false}") boolean communityEdition) {
+        this.brandingDao = brandingDao;
+        this.objectStorage = objectStorage;
+        this.bucket = ossProperties.resolveArtifactBucket();
+        this.publicBaseUrl = requirePublicBaseUrl(publicBaseUrl);
+        this.recommendedRuntimeVersion = requireRuntimeVersion(recommendedRuntimeVersion);
+        this.deploymentVersion = normalizeDeploymentVersion(deploymentVersion);
+        this.communityEdition = communityEdition;
+    }
+
+    public PlatformBrandingVO publicConfig() {
+        return toVO(currentOrDefault(), false);
+    }
+
+    /**
+     * The base URL this deployment actually serves to users and agents: the branding domain
+     * saved in platform_branding_config when one is configured, otherwise the
+     * deployment-managed ainative.public-base-url. Resolved on every call, so saving a
+     * domain in the brand settings takes effect immediately without a restart.
+     */
+    public String effectivePublicBaseUrl() {
+        return effectivePublicBaseUrl(currentOrDefault().getDomain());
+    }
+
+    public String effectiveMcpBaseUrl() {
+        return effectivePublicBaseUrl() + "/api/mcp";
+    }
+
+    private String effectivePublicBaseUrl(String domain) {
+        return isConfiguredDomain(domain) ? domain.trim() : publicBaseUrl;
+    }
+
+    private static boolean isConfiguredDomain(String value) {
+        // Community does not seed an internal domain; an unset value uses the deployment URL.
+        return value != null && !value.isBlank();
+    }
+
+    public String recommendedRuntimeVersion() {
+        return recommendedRuntimeVersion;
+    }
+
+    public PlatformBrandingVO adminConfig(boolean canManage) {
+        return toVO(currentOrDefault(), canManage);
+    }
+
+    public PlatformBrandingVO update(Long userId, UpdatePlatformBrandingRequest request) {
+        PlatformBrandingDO next = new PlatformBrandingDO();
+        next.setPlatformName(nonBlank(request.getPlatformName(), "branding.platform_name_required", "平台名称不能为空", 128));
+        next.setThemeKey(validateThemeKey(request.getThemeKey()));
+        next.setPrimaryColor(validatePrimaryColor(request.getPrimaryColor()));
+        next.setDomain(normalizeOptionalUrl(request.getDomain(), "branding.domain_invalid", "域名格式不合法"));
+        next.setModifierId(userId);
+        int updated = brandingDao.update(next);
+        if (updated == 0) {
+            throw new BizException(ErrorCode.NOT_FOUND);
+        }
+        return toVO(currentOrDefault(), true);
+    }
+
+    public LogoUploadVO uploadLogo(Long userId, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw BizException.keyed(ErrorCode.PARAM_INVALID, "branding.logo_required", null, "Logo 文件不能为空");
+        }
+        if (file.getSize() > MAX_LOGO_SIZE) {
+            throw BizException.keyed(ErrorCode.PARAM_INVALID, "branding.logo_size_limit", null, "Logo 文件不能超过 512 KB");
+        }
+        String contentType = normalizeContentType(file.getContentType());
+        String ext = LOGO_EXTENSIONS.get(contentType);
+        if (ext == null) {
+            throw BizException.keyed(ErrorCode.PARAM_INVALID, "branding.logo_format", null, "Logo 仅支持 PNG、JPG/JPEG、WebP、SVG、GIF、ICO、AVIF");
+        }
+        try {
+            String key = "platform/branding/logo-" + System.currentTimeMillis() + ext;
+            byte[] bytes = file.getBytes();
+            if ("image/svg+xml".equals(contentType)) {
+                SvgLogoValidator.validate(bytes);
+            }
+            StoredObject stored = objectStorage.put(bucket, key, bytes);
+            int updated = brandingDao.updateLogo(stored.getOssRef(), contentType, userId);
+            if (updated == 0) {
+                throw new BizException(ErrorCode.NOT_FOUND);
+            }
+            logoCache = null;
+            PlatformBrandingDO current = currentOrDefault();
+            return new LogoUploadVO(logoUrl(current));
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw BizException.keyed(ErrorCode.STORAGE_ERROR, "branding.logo_upload_failed", null, "Logo 上传失败");
+        }
+    }
+
+    public byte[] logoBytes() {
+        PlatformBrandingDO current = currentOrDefault();
+        if (current.getLogoOssRef() == null || current.getLogoOssRef().isBlank()) {
+            return null;
+        }
+        LogoCacheEntry entry = ensureLogoLoaded(current);
+        return entry.bytes;
+    }
+
+    public String logoContentType() {
+        PlatformBrandingDO current = currentOrDefault();
+        if (current.getLogoOssRef() == null || current.getLogoOssRef().isBlank()) {
+            return "application/octet-stream";
+        }
+        LogoCacheEntry entry = ensureLogoLoaded(current);
+        return entry.contentType;
+    }
+
+    private LogoCacheEntry ensureLogoLoaded(PlatformBrandingDO current) {
+        String ossRef = current.getLogoOssRef();
+        LogoCacheEntry cached = logoCache;
+        if (cached != null && cached.ossRef.equals(ossRef)
+                && cached.expiresAt > System.currentTimeMillis()) {
+            return cached;
+        }
+        byte[] bytes = objectStorage.get(ossRef);
+        String contentType = current.getLogoContentType();
+        if (contentType == null || contentType.isBlank()) {
+            contentType = "application/octet-stream";
+        }
+        LogoCacheEntry entry = new LogoCacheEntry(
+                ossRef, bytes, contentType,
+                System.currentTimeMillis() + LOGO_CACHE_TTL_MS);
+        logoCache = entry;
+        return entry;
+    }
+
+    private static final class LogoCacheEntry {
+        final String ossRef;
+        final byte[] bytes;
+        final String contentType;
+        final long expiresAt;
+
+        LogoCacheEntry(String ossRef, byte[] bytes, String contentType, long expiresAt) {
+            this.ossRef = ossRef;
+            this.bytes = bytes;
+            this.contentType = contentType;
+            this.expiresAt = expiresAt;
+        }
+    }
+
+    private PlatformBrandingDO currentOrDefault() {
+        PlatformBrandingDO current = brandingDao.findActive();
+        if (current != null) {
+            return current;
+        }
+        PlatformBrandingDO fallback = new PlatformBrandingDO();
+        fallback.setPlatformName(DEFAULT_PLATFORM_NAME);
+        fallback.setThemeKey(DEFAULT_THEME_KEY);
+        fallback.setPrimaryColor(DEFAULT_PRIMARY_COLOR);
+        // An unconfigured domain stays empty so callers fall back to ainative.public-base-url.
+        fallback.setDomain(null);
+        return fallback;
+    }
+
+    private PlatformBrandingVO toVO(PlatformBrandingDO current, boolean canManage) {
+        return new PlatformBrandingVO(
+                safe(current.getPlatformName(), DEFAULT_PLATFORM_NAME),
+                logoUrl(current),
+                safe(current.getThemeKey(), DEFAULT_THEME_KEY),
+                safe(current.getPrimaryColor(), DEFAULT_PRIMARY_COLOR),
+                current.getDomain(),
+                effectivePublicBaseUrl(current.getDomain()) + "/api/mcp",
+                recommendedRuntimeVersion,
+                deploymentVersion,
+                communityEdition,
+                canManage);
+    }
+
+    private String logoUrl(PlatformBrandingDO current) {
+        if (current.getLogoOssRef() == null || current.getLogoOssRef().isBlank()) {
+            return "/logo.svg";
+        }
+        int version = current.getVersion() == null ? 0 : current.getVersion();
+        return "/api/platform/branding/logo?v=" + version;
+    }
+
+    private static String safe(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private static String nonBlank(String value, String messageKey, String message, int maxLength) {
+        String trimmed = value == null ? "" : value.trim();
+        if (trimmed.isEmpty() || trimmed.length() > maxLength) {
+            throw BizException.keyed(ErrorCode.PARAM_INVALID, messageKey, null, message);
+        }
+        return trimmed;
+    }
+
+    private static String validateThemeKey(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        if (!THEME_KEYS.contains(trimmed)) {
+            throw BizException.keyed(ErrorCode.PARAM_INVALID, "branding.theme_invalid", null, "主题配色不合法");
+        }
+        return trimmed;
+    }
+
+    private static String validatePrimaryColor(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        if (!trimmed.matches("^#[0-9a-fA-F]{6}$")) {
+            throw BizException.keyed(ErrorCode.PARAM_INVALID, "branding.color_invalid", null, "主题颜色格式不合法");
+        }
+        return trimmed.toLowerCase();
+    }
+
+    private static String requireRuntimeVersion(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        if (!trimmed.matches("^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$")) {
+            throw new IllegalStateException("ainative.runtime.recommended-version must be a semantic version");
+        }
+        return trimmed;
+    }
+
+    private static String normalizeDeploymentVersion(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        if (trimmed.isEmpty()) {
+            return DEFAULT_DEPLOYMENT_VERSION;
+        }
+        if (DEFAULT_DEPLOYMENT_VERSION.equals(trimmed)
+                || trimmed.matches("^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$")) {
+            return trimmed;
+        }
+        throw new IllegalStateException("ainative.version must be x.x.x or a semantic version");
+    }
+
+    private static String requirePublicBaseUrl(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        if (trimmed.isEmpty()) {
+            throw new IllegalStateException("ainative.public-base-url must be configured");
+        }
+        try {
+            URI uri = URI.create(trimmed);
+            String scheme = uri.getScheme();
+            if (scheme == null || uri.getHost() == null
+                    || (!"https".equalsIgnoreCase(scheme) && !"http".equalsIgnoreCase(scheme))
+                    || uri.getQuery() != null || uri.getFragment() != null) {
+                throw new IllegalArgumentException();
+            }
+            return trimmed.replaceAll("/+$", "");
+        } catch (Exception e) {
+            throw new IllegalStateException("ainative.public-base-url must be an absolute http(s) URL", e);
+        }
+    }
+
+    private static String normalizeOptionalUrl(String value, String messageKey, String message) {
+        String trimmed = value == null ? "" : value.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        try {
+            URI uri = URI.create(trimmed);
+            String scheme = uri.getScheme();
+            if (scheme == null || uri.getHost() == null || !"https".equalsIgnoreCase(scheme)) {
+                throw new IllegalArgumentException();
+            }
+            return trimmed.replaceAll("/+$", "");
+        } catch (Exception e) {
+            throw BizException.keyed(ErrorCode.PARAM_INVALID, messageKey, null, message);
+        }
+    }
+
+    private static String normalizeContentType(String value) {
+        if (value == null) {
+            return "";
+        }
+        int semicolon = value.indexOf(';');
+        return (semicolon >= 0 ? value.substring(0, semicolon) : value).trim().toLowerCase(java.util.Locale.ROOT);
+    }
+}

@@ -1,0 +1,217 @@
+package com.ainative.dispatch;
+
+import com.ainative.guidance.InteractionWorkflowService;
+import com.ainative.executor.ExecutorRegistry;
+import com.ainative.redis.RedisManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.UUID;
+
+@Component
+public class DispatchCompensationTask {
+
+    private static final Logger log = LoggerFactory.getLogger(DispatchCompensationTask.class);
+
+    private static final String LOCK_KEY = "dispatch:compensation:lock";
+    private static final long LOCK_TTL_MS = 60_000L;
+    private static final int BATCH = 200;
+    private static final long PENDING_STUCK_MS = 60_000L;        // PENDING older than 1m -> re-drive
+    private static final long PACKAGING_STUCK_MS = 5 * 60_000L;  // allow normal package/OSS latency before recovery
+    private static final long UNACKNOWLEDGED_STUCK_MS = 2 * 60_000L;
+    private static final long PAUSING_STUCK_MS = 2 * 60_000L;
+    private static final long INFLIGHT_STUCK_MS = 60 * 60_000L;  // ACKED/RUNNING older than 60m
+
+    private static final List<String> PENDING_STATES =
+            List.of(DispatchStatus.PENDING);
+    private static final List<String> PACKAGING_STATES =
+            List.of(DispatchStatus.PACKAGING);
+    private static final List<String> UNACKNOWLEDGED_STATES =
+            List.of(DispatchStatus.DISPATCHED);
+    private static final List<String> PAUSING_STATES =
+            List.of(DispatchStatus.PAUSING, DispatchStatus.PAUSE_FAILED);
+    private static final List<String> INFLIGHT_STATES =
+            List.of(DispatchStatus.ACKED, DispatchStatus.RUNNING);
+
+    private final DispatchDao dispatchDao;
+    private final DispatchService dispatchService;
+    private final DispatchPauseService pauseService;
+    private final InteractionWorkflowService interactionWorkflowService;
+    private final RedisManager redisManager;
+    private DispatchRecoveryService recovery;
+    private DeliveryRestartOrchestrator restartOrchestrator;
+    private DispatchRequestService requests;
+    private ExecutorRegistry executorRegistry;
+    private DispatchRuntimeReconciler runtimeReconciler;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setDispatchRequests(DispatchRequestService value) { requests = value; }
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setRuntimeReconciliation(ExecutorRegistry registry, DispatchRuntimeReconciler reconciler) {
+        this.executorRegistry = registry;
+        this.runtimeReconciler = reconciler;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setRecovery(DispatchRecoveryService service) { this.recovery = service; }
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setRestartOrchestrator(DeliveryRestartOrchestrator orchestrator) { this.restartOrchestrator = orchestrator; }
+
+    private DispatchCheckpointService checkpoints;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setCheckpoints(DispatchCheckpointService checkpoints) { this.checkpoints = checkpoints; }
+
+    public DispatchCompensationTask(DispatchDao dispatchDao, DispatchService dispatchService,
+            DispatchPauseService pauseService, InteractionWorkflowService interactionWorkflowService,
+            RedisManager redisManager) {
+        this.dispatchDao = dispatchDao;
+        this.dispatchService = dispatchService;
+        this.pauseService = pauseService;
+        this.interactionWorkflowService = interactionWorkflowService;
+        this.redisManager = redisManager;
+    }
+
+    @Scheduled(fixedDelayString = "${ainative.dispatch.compensation.fixed-delay-ms:30000}")
+    public void sweep() {
+        String lockOwner = UUID.randomUUID().toString();
+        if (!redisManager.tryAcquireLock(LOCK_KEY, lockOwner, LOCK_TTL_MS)) {
+            return;
+        }
+        try {
+            log.info("compensation sweep started");
+            if (requests != null) {
+                try { requests.reconcile(); }
+                catch (RuntimeException e) { log.warn("dispatch request reconciliation failed", e); }
+            }
+            if (checkpoints != null) {
+                try { checkpoints.reconcileRetention(); }
+                catch (RuntimeException failure) { log.warn("checkpoint retention reconciliation deferred", failure); }
+            }
+            if (recovery != null) {
+                try {
+                    recovery.reconcile();
+                } catch (RuntimeException e) {
+                    log.warn("compensation recovery reconciliation failed", e);
+                }
+            }
+            // Resume delivery-restart rounds still waiting for an old execution stop:
+            // covers service restarts mid-wait and stop confirmations that arrived
+            // through paths without an explicit advancement hook.
+            if (restartOrchestrator != null) {
+                try {
+                    restartOrchestrator.sweepWaitingRestarts();
+                } catch (RuntimeException e) {
+                    log.warn("compensation waiting-restart advancement failed", e);
+                }
+            }
+            long now = System.currentTimeMillis();
+            List<DispatchDO> pending = loadPhase(PENDING_STATES,
+                    now - PENDING_STUCK_MS, "pending");
+            List<DispatchDO> packaging = loadPhase(PACKAGING_STATES,
+                    now - PACKAGING_STUCK_MS, "packaging");
+            List<DispatchDO> unacknowledged = loadPhase(UNACKNOWLEDGED_STATES,
+                    now - UNACKNOWLEDGED_STUCK_MS, "unacknowledged");
+            long pausingCutoff = now - PAUSING_STUCK_MS;
+            List<DispatchDO> pausing = loadPhase(PAUSING_STATES, pausingCutoff, "pausing");
+            List<DispatchDO> inflight = loadPhase(INFLIGHT_STATES,
+                    now - INFLIGHT_STUCK_MS, "inflight");
+            log.info("compensation found pending={} packaging={} unacknowledged={} pausing={} inflight={}",
+                    pending.size(), packaging.size(), unacknowledged.size(), pausing.size(), inflight.size());
+            // PENDING stuck -> re-drive (runPending only accepts PENDING rows).
+            // BL-15: 指数退避中的等待单(next_retry_at 未到)不再驱动,避免每 30s 空扫刷日志;
+            // 执行器上线等唤醒路径会把 next_retry_at 清零,到期即恢复正常调度。
+            for (DispatchDO d : pending) {
+                if (recovery != null && !recovery.ready(d)) {
+                    continue;
+                }
+                try {
+                    dispatchService.runPending(d.getId());
+                } catch (Exception e) {
+                    log.warn("compensation re-drive failed dispatchId={}", d.getId(), e);
+                }
+            }
+            // A stale packaging worker is fenced by the optimistic version update. Its
+            // eventual DISPATCHED transition loses the race, while the row can be retried.
+            for (DispatchDO d : packaging) {
+                try {
+                    if (recovery == null) dispatchService.returnPackagingToPending(d.getTenantId(), d.getId());
+                    else if (!recovery.retryPackaging(d, "PACKAGING_DEADLINE_EXCEEDED"))
+                        dispatchService.failPackagingDeadline(d);
+                } catch (Exception e) {
+                    log.warn("compensation packaging-requeue failed dispatchId={}", d.getId(), e);
+                }
+            }
+            // DISPATCHED without ACK means delivery was not confirmed. Return it to the
+            // durable queue instead of failing the workitem.
+            for (DispatchDO d : unacknowledged) {
+                try {
+                    if (recovery != null) {
+                        dispatchService.onUnacknowledgedTimeout(d);
+                    } else if (d.getExecutorId() != null) {
+                        dispatchService.onBusy(d.getTenantId(), d.getExecutorId(), d.getId());
+                    }
+                } catch (Exception e) {
+                    log.warn("compensation unacknowledged requeue failed dispatchId={}", d.getId(), e);
+                }
+            }
+            // A pause command must eventually produce PAUSED or PAUSE_FAILED. If the
+            // runtime disappears or loses the response, release the permanent PAUSING
+            // dead zone so the user can explicitly retry pause or recover execution.
+            for (DispatchDO d : pausing) {
+                try {
+                    if (recovery != null && recovery.cancelRequested(d.getTenantId(), d.getId())) continue;
+                    boolean readyToFence = DispatchStatus.PAUSE_FAILED.equals(d.getStatus())
+                            || pauseService.expireTimedOutPause(d, pausingCutoff);
+                    if (readyToFence
+                            && dispatchService.cancelPauseFailedIfExecutorReleased(d.getTenantId(), d.getId())) {
+                        interactionWorkflowService.onPaused(d.getTenantId(), d.getId());
+                    }
+                } catch (Exception e) {
+                    log.warn("compensation pause-expire failed dispatchId={}", d.getId(), e);
+                }
+            }
+            try {
+                interactionWorkflowService.reconcileReleasedWaiters();
+            } catch (Exception e) {
+                log.warn("compensation waiting-rework repair failed", e);
+            }
+            for (DispatchDO d : inflight) {
+                try {
+                    if (d.executionSourceType() != ExecutionSourceType.WORKITEM) {
+                        dispatchService.onTimeout(d.getTenantId(), d.getId());
+                        continue;
+                    }
+                    // Silence can mean the machine is offline or recovering its local checkpoint.
+                    // Only an authoritative inventory can prove abandonment; wall-clock age must
+                    // not terminalize an execution that the runtime can still reclaim on restart.
+                    if (executorRegistry == null || runtimeReconciler == null
+                            || d.getExecutorId() == null || d.getAgentId() == null) continue;
+                    executorRegistry.currentDispatchSnapshot(d.getExecutorId())
+                            .filter(snapshot -> snapshot.authoritativeInventory() && snapshot.inventoryReady()
+                                    && snapshot.inventoryError() == null)
+                            .ifPresent(snapshot -> runtimeReconciler.request(d.getTenantId(), d.getExecutorId(),
+                                    d.getAgentId(), snapshot.sessionId()));
+                } catch (Exception e) {
+                    log.warn("compensation runtime reconciliation failed dispatchId={}", d.getId(), e);
+                }
+            }
+        } finally {
+            redisManager.releaseLock(LOCK_KEY, lockOwner);
+        }
+    }
+
+    private static List<DispatchDO> safe(List<DispatchDO> rows) {
+        return rows == null ? List.of() : rows;
+    }
+
+    private List<DispatchDO> loadPhase(List<String> states, long cutoff, String phase) {
+        try {
+            return safe(dispatchDao.listStuck(states, cutoff, BATCH));
+        } catch (RuntimeException e) {
+            log.warn("compensation {} query failed", phase, e);
+            return List.of();
+        }
+    }
+}

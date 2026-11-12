@@ -1,0 +1,125 @@
+{
+  "title": "Overview",
+  "description": "What came in, what shipped, and what is waiting on your call.",
+  "toolbar": {
+    "rangeAria": "Recent stats range",
+    "lastWeek": "Last week",
+    "lastMonth": "Last month",
+    "rangeSummary": "Range {{start}} to {{end}}",
+    "timezone": "Timezone {{timezone}}",
+    "dataThrough": "Data through {{date}}",
+    "refresh": "Refresh",
+    "refreshAria": "Refresh overview",
+    "loadFailure": "Failed to load recent stats",
+    "retry": "Retry"
+  },
+  "created": {
+    "title": "New work items",
+    "caption": "Daily new work items over the last {{days}} days.",
+    "trendAria": "Daily trend of new work items over the last {{days}} days"
+  },
+  "delivered": {
+    "title": "Completed work items",
+    "dailyAverage": "Daily average {{value}} per day",
+    "change": "vs previous period {{value}}",
+    "noBase": "No comparable base",
+    "previous_one": "Previous {{start}} to {{end}}: {{count}} completed",
+    "previous_other": "Previous {{start}} to {{end}}: {{count}} completed",
+    "method": "Method: work items entering a DONE-category status within the selected range are counted once per work item; canceled items are excluded. The change compares the previous period of equal length. Counted by completion time.",
+    "methodAria": "Completion metric method"
+  },
+  "pending": {
+    "title": "My pending work items",
+    "caption": "All pending",
+    "hint": "Not limited by the stats range above; every unfinished work item assigned to you is listed.",
+    "workitem": "Work item",
+    "name": "Title",
+    "status": "Status",
+    "priority": "Priority",
+    "reason": "Reason",
+    "updatedAt": "Last updated",
+    "reasonAWAITING_DECISION": "Awaiting your decision",
+    "reasonAWAITING_HANDLING": "Awaiting your action",
+    "reasonIN_PROGRESS": "In progress",
+    "reasonUnknown": "Pending",
+    "total_one": "{{count}} item",
+    "total_other": "{{count}} items",
+    "loading": "Loading…",
+    "empty": "No pending work items",
+    "loadFailure": "Failed to load pending work items",
+    "retry": "Retry",
+    "emptyHint": "Adjust the range, or clear the items currently waiting on you"
+  },
+  "createdList": {
+    "title": "New work items ({{range}})",
+    "caption": "Selected range",
+    "hint": "Same scope as the New work items card above: every work item created in the selected range, including canceled ones; the list length equals the card value.",
+    "workitem": "Work item",
+    "name": "Title",
+    "status": "Status",
+    "priority": "Priority",
+    "createdAt": "Created at",
+    "total_one": "{{count}} item",
+    "total_other": "{{count}} items",
+    "loading": "Loading…",
+    "empty": "No new work items in the selected range",
+    "loadFailure": "Failed to load new work items",
+    "retry": "Retry",
+    "emptyHint": "No work items were created in this range"
+  },
+  "leadTime": {
+    "title": "Avg. Delivery Lead Time",
+    "value": "{{value}} days",
+    "method": "Average time from creation to the DONE entry event for workitems completed in the range; the previous period is the adjacent window of equal length, and a previous period with no completions has no comparable base.",
+    "methodAria": "Explain delivery lead time methodology",
+    "noBase": "No completions in this or previous period",
+    "caption": "Average time from creation to completion"
+  },
+  "inProgress": {
+    "title": "In-Progress Workitems",
+    "caption": "Snapshot at query time (unfinished categories incl. pending decision); not compared over time"
+  },
+  "firstPass": {
+    "title": "First-Pass Rate",
+    "method": "Share of SUCCEEDED dispatches with attempt=0 in the range; scoped to formal delivery dispatches, consistent with Insights.",
+    "methodAria": "Explain first-pass rate methodology",
+    "noData": "No successful dispatches in the range",
+    "caption": "Dispatches that succeeded without retries"
+  },
+  "failed": {
+    "title": "Failed / Timed-out Dispatches",
+    "share": "{{value}}% of all dispatches",
+    "change": "vs previous {{value}}",
+    "noBase": "No failures last period",
+    "previous": "Previous {{start}} ~ {{end}}: {{count}}"
+  },
+  "rework": {
+    "title": "Rework Rate",
+    "method": "Share of dispatches reworked by review comments or retried after failure (three-part idempotency key with attempt>=2); consistent with the realtime board.",
+    "methodAria": "Explain rework rate methodology",
+    "noData": "No dispatches in the range",
+    "caption": "Dispatches reworked by review or retry"
+  },
+  "tokens": {
+    "title": "Token Usage",
+    "trendAria": "Daily token usage trend in the range",
+    "change": "vs previous {{value}}",
+    "noBase": "No usage last period",
+    "previous": "Previous {{start}} ~ {{end}}: {{count}}"
+  },
+  "failures": {
+    "title": "Top Failure Reasons",
+    "caption": "By count",
+    "reason": "Reason",
+    "count": "Count",
+    "share": "Share",
+    "lastTime": "Last seen",
+    "unknown": "Unrecorded reason",
+    "empty": "No failed or timed-out dispatches in the range",
+    "loading": "Loading…",
+    "loadFailure": "Failed to load failure reasons",
+    "retry": "Retry",
+    "emptyHint": "Every dispatch in this range finished successfully"
+  },
+  "separator": "·"
+}

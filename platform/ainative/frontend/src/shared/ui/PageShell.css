@@ -1,0 +1,374 @@
+/* ===== 统一页面壳设计系统(2026-11-10) =====
+ * 目标:所有一级/二级页面同一套视觉语言 —— 品牌渐变横幅、速览胶囊、
+ * 等宽对齐的表单行、等高同宽的筛选控件。
+ * 命名空间:.cfds-*(cf design system),避免与既有 .cf- 类冲突。
+ */
+
+.cfds-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* ---------- 品牌横幅 ---------- */
+.cfds-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 18px 22px;
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 180% at 100% 0%, rgba(var(--cf-accent-rgb), .30), transparent 55%),
+    linear-gradient(118deg, var(--cf-primary) 0%, color-mix(in srgb, var(--cf-primary) 70%, #0b1220) 100%);
+  border: 1px solid rgba(var(--cf-accent-rgb), .32);
+  box-shadow: 0 10px 30px -18px rgba(var(--cf-accent-rgb), .65);
+}
+
+.cfds-page--compact .cfds-hero {
+  padding: 14px 18px;
+  border-radius: 10px;
+}
+
+.cfds-hero__main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.cfds-hero__titles {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cfds-hero__title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 750;
+  letter-spacing: .2px;
+  color: var(--cf-primary-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cfds-page--compact .cfds-hero__title {
+  font-size: 19px;
+}
+
+.cfds-hero__subtitle {
+  margin: 3px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, .78);
+  max-width: 62ch;
+}
+
+/* ---------- 速览胶囊 ---------- */
+.cfds-hero__badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cfds-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, .94);
+  background: rgba(255, 255, 255, .14);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
+}
+
+.cfds-badge--accent {
+  background: rgba(255, 255, 255, .26);
+}
+
+.cfds-badge--muted {
+  background: rgba(0, 0, 0, .18);
+}
+
+.cfds-badge__label {
+  color: rgba(255, 255, 255, .72);
+}
+
+.cfds-badge__value {
+  font-weight: 700;
+}
+
+/* ---------- 操作区 ---------- */
+.cfds-hero__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cfds-hero__actions .ant-btn {
+  height: 34px;
+  padding-inline: 14px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+/* ---------- 正文容器 ---------- */
+.cfds-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ---------- 内容面板 ---------- */
+.cfds-card {
+  background: var(--cf-panel);
+  border: 1px solid var(--cf-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.cfds-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--cf-border);
+}
+
+.cfds-card__titles {
+  min-width: 0;
+}
+
+.cfds-card__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--cf-text);
+}
+
+.cfds-card__desc {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--cf-muted);
+}
+
+.cfds-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cfds-card__actions .ant-btn {
+  height: 32px;
+  border-radius: 8px;
+}
+
+.cfds-card__body {
+  padding: 14px 16px;
+}
+
+/* ---------- 统计小块 ---------- */
+.cfds-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--cf-panel);
+  border: 1px solid var(--cf-border);
+  min-width: 0;
+}
+
+.cfds-stat--accent {
+  border-color: rgba(var(--cf-accent-rgb), .45);
+  background: linear-gradient(150deg, rgba(var(--cf-accent-rgb), .14), var(--cf-panel) 70%);
+}
+
+.cfds-stat--warn {
+  border-color: rgba(217, 119, 6, .45);
+}
+
+.cfds-stat__label {
+  font-size: 12px;
+  color: var(--cf-muted);
+}
+
+.cfds-stat__value {
+  font-size: 22px;
+  font-weight: 750;
+  color: var(--cf-text);
+  line-height: 1.25;
+}
+
+.cfds-stat__hint {
+  font-size: 11px;
+  color: var(--cf-muted);
+}
+
+/* ---------- 工具栏:左右分栏 + 等高控件 ---------- */
+.cfds-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--cf-panel);
+  border: 1px solid var(--cf-border);
+}
+
+.cfds-toolbar__filters,
+.cfds-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 筛选控件统一尺寸:输入框与选择器同高同宽,按钮与之一致 */
+.cfds-toolbar__filters .ant-input,
+.cfds-toolbar__filters .ant-input-affix-wrapper,
+.cfds-toolbar__filters .ant-select,
+.cfds-toolbar__filters .ant-picker {
+  height: 34px;
+  /* 200px 会把「高级筛选」挤到第二行单独一行(视觉评审:筛选区松散且换行突兀) */
+  min-width: 168px;
+  border-radius: 8px;
+}
+
+.cfds-toolbar__filters .ant-select-selector {
+  height: 32px !important;
+  border-radius: 8px !important;
+}
+
+/* 带前缀/清号/搜索按钮的组合输入框:内层 input 不吃 min-width 200,
+ * 否则「内层 200 最小宽 + 图标/按钮」撑破外壳造成横向溢出(执行记录实测 227>198) */
+.cfds-toolbar__filters .ant-input-affix-wrapper .ant-input,
+.cfds-toolbar__filters .ant-input-search .ant-input,
+.cfds-toolbar__filters .ant-input-group .ant-input {
+  /* flex 而非 width:100%:input 撑满会把搜索按钮(组内 addon)挤出组外,中间留缝 */
+  min-width: 0;
+  flex: 1 1 auto;
+  width: auto;
+  height: 32px;
+}
+
+/* 多选选择器(如编队筛选)默认比单选高:压到同一 32px 内层高度,标签单行溢出隐藏 */
+.cfds-toolbar__filters .ant-select-multiple .ant-select-selector {
+  height: 32px !important;
+  padding-block: 2px !important;
+  overflow: hidden;
+  flex-wrap: nowrap;
+}
+
+/* 搜索组合(Input.Search 带按钮):去掉对内层 input 的 min-width 限制,
+ * 否则「输入段 200px 最小宽 + 按钮段」撑破 240px 外壳造成横向溢出 */
+.cfds-toolbar__filters .ant-input-search .ant-input {
+  min-width: 0;
+  width: 100%;
+  height: 34px;
+}
+
+.cfds-toolbar__filters .ant-input-group-addon .ant-btn {
+  height: 34px;
+}
+
+/* 工具栏里的小号按钮(如「高级筛选」)提到与其它筛选件同高 */
+.cfds-toolbar__filters .ant-btn.ant-btn-sm {
+  height: 34px !important;
+}
+
+.cfds-toolbar__filters .ant-btn,
+.cfds-toolbar__actions .ant-btn {
+  height: 34px;
+  border-radius: 8px;
+  padding-inline: 14px;
+  font-weight: 600;
+}
+
+/* ---------- 表单行:标签列定宽,控件列自适应 ---------- */
+.cfds-form-row {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px 16px;
+  padding: 10px 0;
+}
+
+.cfds-form-row + .cfds-form-row {
+  border-top: 1px solid var(--cf-border);
+}
+
+.cfds-form-row__label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cf-muted);
+}
+
+.cfds-form-row__required {
+  color: #dc2626;
+}
+
+/* 必填星号用伪元素绘制,避免把它当作可见文案 */
+.cfds-form-row__required::before {
+  content: '*';
+}
+
+.cfds-form-row__control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cfds-form-row__control .ant-input,
+.cfds-form-row__control .ant-input-affix-wrapper,
+.cfds-form-row__control .ant-select,
+.cfds-form-row__control .ant-picker {
+  max-width: 480px;
+  border-radius: 8px;
+}
+
+.cfds-form-row__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--cf-muted);
+}
+
+/* 窄屏:表单行改为单列,避免标签与控件挤压错位 */
+@media (max-width: 720px) {
+  .cfds-form-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .cfds-form-row__label {
+    padding-top: 0;
+  }
+
+  .cfds-toolbar__filters .ant-input,
+  .cfds-toolbar__filters .ant-input-affix-wrapper,
+  .cfds-toolbar__filters .ant-select {
+    min-width: 100%;
+  }
+}

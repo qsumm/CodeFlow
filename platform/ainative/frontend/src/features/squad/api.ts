@@ -1,0 +1,262 @@
+import { apiClient } from '@/shared/api/client';
+import type { PageResult } from '@/shared/types/common';
+
+export interface Squad {
+  id: number;
+  name: string;
+  description: string;
+  ownerId?: number | null;
+  memberCount: number;
+  roleCount?: number;
+  executorOnlineCount?: number;
+  executorTotalCount?: number;
+  sdlcCount?: number;
+  memberAgentIds?: number[] | null;
+  debugLogEnabled?: boolean;
+  sdlcs?: SquadSdlcSummary[] | null;
+  executors?: SquadExecutorSummary[] | null;
+  gmtCreate: string;
+}
+
+export interface SquadSdlcSummary {
+  id: number;
+  name: string;
+  workType: string | null;
+  status: string | null;
+}
+
+export interface SquadExecutorSummary {
+  id: number;
+  agentId: number | null;
+  agentName: string | null;
+  name: string;
+  status: string;
+  clientKind: string | null;
+  lastHeartbeat: string | null;
+}
+
+export interface SquadSdlcStep {
+  id: number;
+  stepOrder: number;
+  name: string;
+  handlerType: string;
+  handlerRoleRef: string | null;
+}
+
+export interface SquadMember {
+  agentId: number;
+  agentName: string;
+  /** STANDARD=普通数字员工 / PLATFORM=平台数字人 */
+  agentKind?: 'STANDARD' | 'PLATFORM';
+  roleCode: string;
+  roleName?: string;
+  responsibilities?: string;
+  sdlcId?: number | null;
+  sdlcName?: string;
+  sdlcSteps?: SquadSdlcStep[];
+}
+
+export async function listSquads(params: { pageNum: number; pageSize: number }): Promise<PageResult<Squad>> {
+  const resp = await apiClient.get<PageResult<Squad> | Squad[]>('/api/squads', {
+    params: { page: params.pageNum, size: params.pageSize },
+  });
+  if (Array.isArray(resp.data)) {
+    const list = resp.data.map(normalizeSquad);
+    return {
+      list,
+      total: list.length,
+      pageNum: params.pageNum,
+      pageSize: params.pageSize,
+    };
+  }
+  return {
+    ...resp.data,
+    list: resp.data.list.map(normalizeSquad),
+  };
+}
+
+export const SQUAD_PAGE_SIZE = 100;
+
+// GET /api/squads is paginated, so one wide page silently drops every squad past the cap: those
+// squads then vanish from the filter dropdown and from the grouped view without any hint.
+export async function listAllSquads(pageSize = SQUAD_PAGE_SIZE): Promise<Squad[]> {
+  const first = await listSquads({ pageNum: 1, pageSize });
+  const byId = new Map<number, Squad>(first.list.map((squad) => [squad.id, squad]));
+  let pageNum = 2;
+  while (byId.size < first.total) {
+    const next = await listSquads({ pageNum, pageSize });
+    const sizeBefore = byId.size;
+    next.list.forEach((squad) => byId.set(squad.id, squad));
+    // Stops as soon as a page adds nothing new, so an overstated total cannot loop forever.
+    if (byId.size === sizeBefore) break;
+    pageNum += 1;
+  }
+  return Array.from(byId.values());
+}
+
+function normalizeSquad(squad: Squad): Squad {
+  return {
+    ...squad,
+    memberCount: squad.memberCount ?? squad.memberAgentIds?.length ?? 0,
+    roleCount: squad.roleCount ?? 0,
+    executorOnlineCount: squad.executorOnlineCount ?? 0,
+    executorTotalCount: squad.executorTotalCount ?? 0,
+    sdlcCount: squad.sdlcCount ?? 0,
+  };
+}
+
+export async function getSquad(id: number): Promise<Squad> {
+  const resp = await apiClient.get<Squad>(`/api/squads/${id}`);
+  return resp.data;
+}
+
+// GET /api/squads returns memberAgentIds as null; only the detail endpoint populates it.
+export async function listSquadsWithMembers(pageSize = SQUAD_PAGE_SIZE): Promise<Squad[]> {
+  const squads = await listAllSquads(pageSize);
+  if (squads.length === 0) {
+    return [];
+  }
+  return Promise.all(squads.map(squad => getSquad(squad.id)));
+}
+
+export async function createSquad(params: { name: string; description?: string }): Promise<Squad> {
+  const resp = await apiClient.post<Squad>('/api/squads', params);
+  return resp.data;
+}
+
+/**
+ * 更新小队。后端 `PUT /api/squads/{id}` 混合了 PUT/PATCH 语义：
+ * `name`/`description`/`owner_id` 无条件覆盖，只有 `debug_log_enabled` 走 COALESCE。
+ * 因此调用方必须整对象提交（带上当前小队的 name/description/ownerId），
+ * 只发单个字段会把未提交列写成 null（`name` 非空列会直接 500）。
+ */
+export async function updateSquad(
+  id: number,
+  data: { name?: string; description?: string; ownerId?: number | null; debugLogEnabled?: boolean },
+): Promise<Squad> {
+  const resp = await apiClient.put<Squad>(`/api/squads/${id}`, data);
+  return resp.data;
+}
+
+export async function deleteSquad(id: number): Promise<void> {
+  await apiClient.delete(`/api/squads/${id}`);
+}
+
+export async function getSquadMembers(squadId: number): Promise<SquadMember[]> {
+  const resp = await apiClient.get<SquadMember[]>(`/api/squads/${squadId}/members`);
+  return resp.data;
+}
+
+export async function addSquadMember(squadId: number, agentId: number): Promise<void> {
+  await apiClient.post(`/api/squads/${squadId}/members`, { agentIds: [agentId] });
+}
+
+export async function removeSquadMember(squadId: number, agentId: number): Promise<void> {
+  await apiClient.delete(`/api/squads/${squadId}/members/${agentId}`);
+}
+
+export interface SquadCopyCheck {
+  eligible: boolean;
+  missingOnlineVersions: { agentId: number; agentName: string }[];
+  /** 悬空引用（agent#/skill#/plugin#/environment_variable#/sdlc#），与版本无关。 */
+  missingDependencies: string[];
+}
+
+export interface SquadCopyTarget {
+  id: number;
+  name: string;
+  description: string;
+}
+
+export interface SquadCopyTargetResult {
+  workspaceId: number;
+  workspaceName: string;
+  success: boolean;
+  squadId: number | null;
+  errorCode: string | null;
+  message: string | null;
+}
+
+export interface SquadCopyResult {
+  requestId: string;
+  results: SquadCopyTargetResult[];
+}
+
+export async function checkSquadCopy(squadId: number): Promise<SquadCopyCheck> {
+  const resp = await apiClient.get<SquadCopyCheck>(`/api/squads/${squadId}/copy-check`);
+  return {
+    eligible: resp.data?.eligible === true,
+    missingOnlineVersions: resp.data?.missingOnlineVersions ?? [],
+    // 旧服务端响应没有该字段，缺省为空列表而不是 undefined。
+    missingDependencies: resp.data?.missingDependencies ?? [],
+  };
+}
+
+/** 服务端分页的目标候选；过滤（源空间、已删除、权限）在服务端完成，前端只负责展示与选择。 */
+export async function listSquadCopyTargets(
+  squadId: number,
+  params: { keyword?: string; pageNum: number; pageSize: number },
+): Promise<PageResult<SquadCopyTarget>> {
+  const keyword = params.keyword?.trim();
+  const resp = await apiClient.get<PageResult<SquadCopyTarget>>(`/api/squads/${squadId}/copy-targets`, {
+    params: { keyword: keyword || undefined, page: params.pageNum, size: params.pageSize },
+  });
+  return resp.data;
+}
+
+export async function copySquadToWorkspaces(
+  squadId: number,
+  params: { requestId: string; targetWorkspaceIds: number[] },
+): Promise<SquadCopyResult> {
+  const resp = await apiClient.post<SquadCopyResult>(`/api/squads/${squadId}/copy`, params);
+  return resp.data;
+}
+
+// 编队一键配齐：批量给缺运行器的成员创建执行器并生成启动命令（仅管理员；整批一个事务）。
+export type SquadProvisionStatus = 'CREATED' | 'SKIPPED_EXISTS' | 'FAILED';
+
+export interface SquadProvisionExecutor {
+  id: number;
+  name: string;
+  /** 明文令牌仅管理员可见；非管理员为 null。 */
+  token: string | null;
+  clientKind: string;
+  memoryMode: string | null;
+  maxConcurrentDispatches?: number | null;
+  configVersion: number | null;
+}
+
+export interface SquadProvisionItem {
+  agentId: number;
+  agentName: string;
+  status: SquadProvisionStatus;
+  /** CREATED 时携带新建的执行器。 */
+  executor?: SquadProvisionExecutor | null;
+  /** SKIPPED_EXISTS 时指向该成员名下已有的执行器。 */
+  existingExecutorId?: number | null;
+  /** 就绪可直接复制的启动命令（含明文令牌，仅管理员可见）。 */
+  command?: string | null;
+  error?: string | null;
+}
+
+export interface SquadProvisionResult {
+  squadId: number;
+  items: SquadProvisionItem[];
+}
+
+export interface SquadProvisionRequest {
+  /** 要配运行器的成员（小队成员的 agentId 子集）；空表示「全部缺运行器的成员」。 */
+  agentIds?: number[];
+  clientKind?: string;
+  memoryMode?: string;
+  maxConcurrentDispatches?: number;
+  os?: string;
+}
+
+export async function provisionSquadExecutors(
+  squadId: number,
+  params: SquadProvisionRequest,
+): Promise<SquadProvisionResult> {
+  const resp = await apiClient.post<SquadProvisionResult>(`/api/squads/${squadId}/executors`, params);
+  return resp.data;
+}

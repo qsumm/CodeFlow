@@ -1,0 +1,167 @@
+{
+  "actions": {
+    "save": "保存",
+    "cancel": "取消",
+    "close": "关闭",
+    "delete": "删除",
+    "edit": "编辑",
+    "back": "返回"
+  },
+  "page": {
+    "title": "记忆库",
+    "create": "写一条记忆",
+    "loadError": "记忆目录没读到,刷新再试",
+    "owners": "归属",
+    "noOwners": "还没有可用归属",
+    "selectOwner": "先选一个归属",
+    "noWritableMemory": "这里还没有记忆,点「写一条记忆」开始",
+    "noReadableMemory": "没有可查看的记忆",
+    "revision": "修订 r{{revision}}",
+    "topics": "记忆条目({{count}})",
+    "index": "索引",
+    "editIndex": "改索引",
+    "indexHint": "这里登记有哪些记忆、什么时候该翻;正文在下面的条目里。",
+    "noTopics": "还没有记忆条目",
+    "history": "改动记录",
+    "noHistory": "还没有改动",
+    "acl": "访问授权",
+    "imports": "本地档案",
+    "agentImports": "本地档案挂在具体 AI 成员的个人记忆下,选一个 AI 成员查看。",
+    "deleteConfirm": "连索引引用一起删除这条记忆?"
+  },
+  "commands": {
+    "saveMemory": "存这条记忆",
+    "saveIndex": "存索引",
+    "deleteMemory": "删记忆"
+  },
+  "messages": {
+    "memorySaved": "记忆已存",
+    "indexSaved": "索引已存"
+  },
+  "scope": {
+    "ORG": "全组织共享",
+    "SQUAD": "编队共享",
+    "AGENT": "AI 成员私有"
+  },
+  "owner": {
+    "organization": "组织共享区",
+    "description": "{{squads}}{{scope}}{{ownerRef}}",
+    "option": "{{squads}}{{name}}",
+    "squadSeparator": "、"
+  },
+  "types": {
+    "user": "用户偏好",
+    "feedback": "反馈与约定",
+    "project": "项目背景",
+    "reference": "参考资料"
+  },
+  "migration": {
+    "summary": "存量搬迁 · {{migrated}} · {{pending}}",
+    "hint": "搬迁由后台接力执行并自动重试,原始档案不会被清除;这里的数字只反映搬迁进度,与检索索引容量无关。",
+    "migrated_other": "已入库 {{count}} 份",
+    "pending_other": "排队 {{count}} 份"
+  },
+  "document": {
+    "version": "第 {{version}} 版",
+    "metadataParseWarning": "元信息解析失败,原文见文件详情",
+    "summary": "{{description}} · {{bytes}} · {{version}}",
+    "viewer": "{{path}} · 第 {{version}} 版"
+  },
+  "operations": {
+    "CREATE": "新增",
+    "UPDATE": "修改",
+    "DELETE": "删除"
+  },
+  "topic": {
+    "edit": "改记忆",
+    "hint": "归属决定谁能用;保存即维护正文与索引,不需要审核。",
+    "scope": "归属",
+    "owner": "所属",
+    "type": "类型",
+    "title": "标题",
+    "description": "何时适用",
+    "body": "正文",
+    "descriptionPlaceholder": "什么任务/情境下该读这条"
+  },
+  "validation": {
+    "scope": "选归属",
+    "owner": "选所属",
+    "type": "选类型",
+    "title": "填标题",
+    "description": "填适用说明",
+    "body": "填正文",
+    "path": "填路径",
+    "content": "填内容",
+    "safePath": "路径须是安全的相对 Markdown 路径",
+    "subjectType": "选授权对象",
+    "subjectRef": "填对象编号",
+    "permission": "选允许操作"
+  },
+  "editor": {
+    "edit": "编辑记忆文档",
+    "create": "新建记忆文档",
+    "readOnly": "当前存储只读",
+    "limitWarning": "MEMORY.md 超过 200 行 / 25,000 字节;仍可保存,但会话只加载前缀",
+    "path": "路径",
+    "pathExample": "feedback_testing.md",
+    "content": "内容"
+  },
+  "acl": {
+    "subjects": {
+      "USER": "平台用户",
+      "AGENT": "AI 成员",
+      "SQUAD": "编队成员",
+      "ROLE": "全体 AI 成员"
+    },
+    "permissions": {
+      "READ": "查看",
+      "WRITE": "编辑",
+      "ADMIN": "管理"
+    },
+    "adminOnly": "仅项目管理员可维护访问权限",
+    "setCommand": "配置访问授权",
+    "removeCommand": "撤销访问授权",
+    "hint": "授权决定谁能看、谁能改这份记忆。",
+    "help": "组织共享默认供本空间 AI 成员读取，编队共享默认供所属成员读取。AI 成员仅能自主编辑自己的个人记忆，不能编辑共享记忆，也不能访问其他 AI 成员的个人记忆；平台用户的编辑权限可单独授予。",
+    "add": "加一条授权",
+    "empty": "暂无额外授权;空间管理员始终可管理,AI 成员始终可写自己的私有记忆",
+    "deleteConfirm": "撤销这条授权?",
+    "create": "新建授权",
+    "subjectType": "授权对象",
+    "subjectRef": "对象编号",
+    "subjectHelp": "填写用户、AI 成员或编队的 ID，例如 AI 成员 40013；选择全部 AI 成员时填 ALL_AGENTS。",
+    "subjectPlaceholder": "如 40013",
+    "permission": "允许操作",
+    "permissionHelp": "查看=读;编辑=增删改;管理=含编辑权。AI 成员实际写入仍仅限私有记忆。"
+  },
+  "import": {
+    "resume": "恢复",
+    "pause": "暂停",
+    "recurate": "重新整理",
+    "retire": "退役",
+    "retireConfirm": "退役后不再从此来源导入,确认?",
+    "status": {
+      "MISSING": "本地文件不在了",
+      "ACTIVE": "可导入",
+      "PAUSED": "已暂停",
+      "RETIRED": "已退役",
+      "RECURATE_REQUESTED": "等重新整理",
+      "STALE": "久未检查",
+      "TOO_LARGE": "文件超限"
+    },
+    "adminOnly": "仅项目管理员可管理本地记忆来源",
+    "hint": "本地来源来自 Qoder/QoderCN 旧档案,与上面的存量搬迁是两条通道。",
+    "help": "本地文件找不到≠平台记忆丢了:可能还没建、被移走或不是可读文件;已导入的记忆不会因此被删。",
+    "empty": "没有可导入的本地档案",
+    "summary": "AI 成员 #{{agentId}} · {{imports}} · 上次核对 {{date}}",
+    "title": "本地档案导入",
+    "successCount_other": "最近成功导入 {{count}} 次",
+    "missingCount_other": "本地文件缺失({{count}})"
+  },
+  "counts": {
+    "total_other": "共 {{count}} 条",
+    "bytes_other": "{{value}} 字节",
+    "lines_other": "{{value}} 行",
+    "measurements": "{{lines}} · {{bytes}}"
+  }
+}

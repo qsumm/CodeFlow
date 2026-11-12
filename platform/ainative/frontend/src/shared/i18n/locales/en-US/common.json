@@ -1,0 +1,92 @@
+{
+  "language": {
+    "switch": "Switch language",
+    "syncFailed": "Could not save your language preference. Your selection is still active in this browser."
+  },
+  "overlay": {
+    "close": "Close"
+  },
+  "appearance": {
+    "dark": "Dark",
+    "light": "Light",
+    "system": "System",
+    "switch": "Switch appearance",
+    "current": "Appearance: {{mode}}",
+    "scope": "Appearance applies only to this browser.",
+    "studio": "Theme studio",
+    "accentSection": "Accent color",
+    "accentNamed": "{color}",
+    "accentCustom": "Custom color",
+    "accentApply": "Apply",
+    "accentApplied": "Accent color updated",
+    "accentReset": "Following platform brand color again",
+    "accentFollowPlatform": "Follow platform",
+    "presetStream": "Stream blue (default)",
+    "presetJade": "Jade teal",
+    "presetMoss": "Moss green",
+    "presetIris": "Iris purple",
+    "presetOrchid": "Orchid violet",
+    "presetCinnabar": "Cinnabar red",
+    "presetAmber": "Amber orange",
+    "presetSand": "Sand gold",
+    "presetLinear": "Indigo",
+    "presetPine": "Pine green",
+    "backgroundSection": "Custom background",
+    "backgroundHint": "Upload an image as your workspace background; stored only in this browser.",
+    "backgroundUpload": "Upload image",
+    "backgroundClear": "Remove",
+    "backgroundCleared": "Custom background removed",
+    "backgroundCurrent": "Current background preview",
+    "backgroundTint": "Overlay tint",
+    "backgroundTooLarge": "Image still exceeds {limit}KB after compression; pick a smaller one",
+    "backgroundNotImage": "Please choose an image file",
+    "backgroundFailed": "Failed to process the image; try another one",
+    "studioNote": "Accent and background are stored only in this browser, not synced with your account; lower tint shows the image more clearly.",
+    "tintPercent": "{{value}}%"
+  },
+  "account": {
+    "settings": "Profile settings",
+    "logout": "Sign out",
+    "menu": "User menu",
+    "login": "Sign in",
+    "expired": "You are not signed in or your session has expired",
+    "networkError": "Network error"
+  },
+  "workspace": {
+    "switched": "Switched to {{name}}",
+    "switchFailed": "Could not switch workspace",
+    "notMember": "You are not a member of this work item's workspace",
+    "linkedSwitchFailed": "Could not switch to this work item's workspace",
+    "manage": "Manage workspaces...",
+    "unselected": "Not selected"
+  },
+  "navigation": {
+    "expand": "Expand menu",
+    "collapse": "Collapse menu",
+    "help": "Help center",
+    "content": "Page content",
+    "tree": "Navigation tree",
+    "commandPalette": "Command palette",
+    "commandPaletteSearch": "Search work items, runners, docs…",
+    "paletteEmpty": "No matching destinations",
+    "paletteHint": "↑↓ select · ↵ open · esc close",
+    "docsHint": "Open docs in a new tab",
+    "kbdDocs": "F1",
+    "kbdSettings": "⌘,",
+    "kbdPalette": "⌘K",
+    "projectIdPrefix": "#",
+    "statusProj": "proj: ",
+    "versionPrefix": "v"
+  },
+  "duration": {
+    "second_one": "{{count}} second",
+    "second_other": "{{count}} seconds",
+    "minute_one": "{{count}} minute",
+    "minute_other": "{{count}} minutes",
+    "hour_one": "{{count}} hour",
+    "hour_other": "{{count}} hours",
+    "remainderMinute_one": "{{count}} minute",
+    "remainderMinute_other": "{{count}} minutes",
+    "hoursMinutes": "{{hours}} {{minutes}}"
+  }
+}

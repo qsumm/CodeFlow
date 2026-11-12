@@ -1,0 +1,519 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ainative.dispatch.DispatchDao">
+
+    <resultMap id="dispatchMap" type="com.ainative.dispatch.DispatchDO">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="source_type" property="sourceType"/>
+        <result column="workitem_id" property="workitemId"/>
+        <result column="sdlc_step_id" property="sdlcStepId"/>
+        <result column="agent_id" property="agentId"/>
+        <result column="agent_version_id" property="agentVersionId"/>
+        <result column="executor_id" property="executorId"/>
+        <result column="package_oss_ref" property="packageOssRef"/>
+        <result column="status" property="status"/>
+        <result column="attempt" property="attempt"/>
+        <result column="idempotency_key" property="idempotencyKey"/>
+        <result column="result_summary" property="resultSummary"/>
+        <result column="error" property="error"/>
+        <result column="resume_from_dispatch_id" property="resumeFromDispatchId"/>
+        <result column="delivery_source_dispatch_id" property="deliverySourceDispatchId"/>
+        <result column="resume_mode" property="resumeMode"/>
+        <result column="debug_log_enabled" property="debugLogEnabled"/>
+        <result column="gmt_create" property="gmtCreate"/>
+        <result column="gmt_modified" property="gmtModified"/>
+        <result column="creator_id" property="creatorId"/>
+        <result column="modifier_id" property="modifierId"/>
+        <result column="is_deleted" property="isDeleted"/>
+        <result column="version" property="version"/>
+    </resultMap>
+
+    <sql id="cols" databaseId="ainative-source-aware">
+        id, tenant_id, source_type, workitem_id, sdlc_step_id, agent_id, agent_version_id, executor_id,
+        package_oss_ref, status, attempt, idempotency_key, result_summary, error,
+        resume_from_dispatch_id, delivery_source_dispatch_id, resume_mode, debug_log_enabled,
+        gmt_create, gmt_modified, creator_id, modifier_id, is_deleted, version
+    </sql>
+
+    <sql id="cols" databaseId="ainative-legacy">
+        id, tenant_id, 'WORKITEM' AS source_type, workitem_id, sdlc_step_id, agent_id, agent_version_id, executor_id,
+        package_oss_ref, status, attempt, idempotency_key, result_summary, error,
+        resume_from_dispatch_id, delivery_source_dispatch_id, resume_mode,
+        gmt_create, gmt_modified, creator_id, modifier_id, is_deleted, version
+    </sql>
+
+    <insert id="insert" databaseId="ainative-source-aware"
+            parameterType="com.ainative.dispatch.DispatchDO"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO dispatch
+            (tenant_id, source_type, workitem_id, sdlc_step_id, agent_id, agent_version_id, executor_id,
+             package_oss_ref, status, attempt, idempotency_key, result_summary, error,
+             resume_from_dispatch_id, delivery_source_dispatch_id, resume_mode,
+             creator_id, modifier_id, version)
+        VALUES
+            (#{tenantId}, #{sourceType}, #{workitemId}, #{sdlcStepId}, #{agentId}, #{agentVersionId}, #{executorId},
+             #{packageOssRef}, #{status}, #{attempt}, #{idempotencyKey}, #{resultSummary}, #{error},
+             #{resumeFromDispatchId}, #{deliverySourceDispatchId}, #{resumeMode},
+             #{creatorId}, #{modifierId}, #{version})
+    </insert>
+
+    <insert id="insert" databaseId="ainative-legacy"
+            parameterType="com.ainative.dispatch.DispatchDO"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO dispatch
+            (tenant_id, workitem_id, sdlc_step_id, agent_id, agent_version_id, executor_id,
+             package_oss_ref, status, attempt, idempotency_key, result_summary, error,
+             resume_from_dispatch_id, delivery_source_dispatch_id, resume_mode,
+             creator_id, modifier_id, version)
+        VALUES
+            (#{tenantId}, #{workitemId}, #{sdlcStepId}, #{agentId}, #{agentVersionId}, #{executorId},
+             #{packageOssRef}, #{status}, #{attempt}, #{idempotencyKey}, #{resultSummary}, #{error},
+             #{resumeFromDispatchId}, #{deliverySourceDispatchId}, #{resumeMode},
+             #{creatorId}, #{modifierId}, #{version})
+    </insert>
+
+    <select id="findById" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <select id="findByIdempotencyKey" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId} AND idempotency_key = #{idempotencyKey} AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <select id="findMaxAttempt" databaseId="ainative-source-aware" resultType="java.lang.Integer">
+        SELECT COALESCE(MAX(attempt), 0) FROM dispatch
+        WHERE tenant_id = #{tenantId} AND workitem_id = #{workitemId}
+          AND source_type = 'WORKITEM'
+          AND sdlc_step_id = #{sdlcStepId} AND is_deleted = 0
+    </select>
+
+    <select id="findMaxAttempt" databaseId="ainative-legacy" resultType="java.lang.Integer">
+        SELECT COALESCE(MAX(attempt), 0) FROM dispatch
+        WHERE tenant_id = #{tenantId} AND workitem_id = #{workitemId}
+          AND sdlc_step_id = #{sdlcStepId} AND is_deleted = 0
+    </select>
+
+    <select id="findMaxAttemptBySource" databaseId="ainative-source-aware" resultType="java.lang.Integer">
+        SELECT COALESCE(MAX(attempt), 0) FROM dispatch
+        WHERE tenant_id = #{tenantId}
+          AND source_type = #{sourceType}
+          AND workitem_id = #{sourceId}
+          <choose>
+              <when test="sdlcStepId != null">AND sdlc_step_id = #{sdlcStepId}</when>
+              <otherwise>AND sdlc_step_id IS NULL</otherwise>
+          </choose>
+          AND is_deleted = 0
+    </select>
+
+    <update id="updateStatus">
+        UPDATE dispatch
+        SET status = #{status},
+            <if test="agentVersionId != null">agent_version_id = #{agentVersionId},</if>
+            <if test="executorId != null">executor_id = #{executorId},</if>
+            <if test="packageOssRef != null">package_oss_ref = #{packageOssRef},</if>
+            <if test="resultSummary != null">result_summary = #{resultSummary},</if>
+            <if test="error != null">error = #{error},</if>
+            version = version + 1,
+            modifier_id = #{modifierId}
+        WHERE id = #{id} AND tenant_id = #{tenantId}
+          AND version = #{version} AND is_deleted = 0
+    </update>
+
+    <update id="pinScheduledAgentVersion" databaseId="ainative-source-aware">
+        UPDATE dispatch
+        SET agent_version_id = #{agentVersionId}, modifier_id = #{modifierId}
+        WHERE id = #{id} AND tenant_id = #{tenantId}
+          AND source_type = 'SCHEDULED_TASK_RUN' AND agent_id = #{agentId}
+          AND status = 'PENDING' AND agent_version_id IS NULL AND is_deleted = 0
+    </update>
+
+    <update id="markDebugLogEnabled" databaseId="ainative-source-aware">
+        UPDATE dispatch
+        SET debug_log_enabled = 1
+        WHERE id = #{id} AND tenant_id = #{tenantId} AND is_deleted = 0
+          AND status = 'PACKAGING'
+    </update>
+
+    <select id="listByWorkitem" databaseId="ainative-source-aware" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId} AND workitem_id = #{workitemId}
+          AND source_type = 'WORKITEM'
+          AND is_deleted = 0
+        ORDER BY gmt_create ASC
+    </select>
+
+    <select id="listByWorkitem" databaseId="ainative-legacy" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId} AND workitem_id = #{workitemId}
+          AND is_deleted = 0
+        ORDER BY gmt_create ASC
+    </select>
+
+    <select id="listBySource" databaseId="ainative-source-aware" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId}
+          AND source_type = #{sourceType}
+          AND workitem_id = #{sourceId}
+          AND is_deleted = 0
+        ORDER BY gmt_create ASC
+    </select>
+
+    <select id="listLatestByWorkitemIds" databaseId="ainative-source-aware" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId}
+          AND source_type = 'WORKITEM' AND is_deleted = 0
+          AND id IN (
+              SELECT latest_id FROM (
+                  SELECT MAX(id) AS latest_id FROM dispatch
+                  WHERE tenant_id = #{tenantId}
+                    AND is_deleted = 0
+                    AND source_type = 'WORKITEM'
+                    AND workitem_id IN
+                    <foreach collection="workitemIds" item="wid" open="(" separator="," close=")">#{wid}</foreach>
+                  GROUP BY workitem_id
+              ) t
+          )
+    </select>
+
+    <select id="listLatestByWorkitemIds" databaseId="ainative-legacy" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId}
+          AND is_deleted = 0
+          AND id IN (
+              SELECT latest_id FROM (
+                  SELECT MAX(id) AS latest_id FROM dispatch
+                  WHERE tenant_id = #{tenantId}
+                    AND is_deleted = 0
+                    AND workitem_id IN
+                    <foreach collection="workitemIds" item="wid" open="(" separator="," close=")">#{wid}</foreach>
+                  GROUP BY workitem_id
+              ) t
+          )
+    </select>
+
+    <select id="listByWorkitemIds" databaseId="ainative-source-aware" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId}
+          AND source_type = 'WORKITEM' AND is_deleted = 0
+          AND workitem_id IN
+          <foreach collection="workitemIds" item="wid" open="(" separator="," close=")">#{wid}</foreach>
+        ORDER BY gmt_create ASC
+    </select>
+
+    <select id="listByWorkitemIds" databaseId="ainative-legacy" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId}
+          AND is_deleted = 0
+          AND workitem_id IN
+          <foreach collection="workitemIds" item="wid" open="(" separator="," close=")">#{wid}</foreach>
+        ORDER BY gmt_create ASC
+    </select>
+
+    <select id="listLatestByWorkitemAndAgent" databaseId="ainative-source-aware" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId}
+          AND source_type = 'WORKITEM'
+          AND workitem_id = #{workitemId}
+          AND agent_id = #{agentId}
+          AND (resume_mode IS NULL OR resume_mode &lt;&gt; 'SIDE_INTERACTION')
+          AND is_deleted = 0
+        ORDER BY id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="listLatestByWorkitemAndAgent" databaseId="ainative-legacy" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId}
+          AND workitem_id = #{workitemId}
+          AND agent_id = #{agentId}
+          AND (resume_mode IS NULL OR resume_mode &lt;&gt; 'SIDE_INTERACTION')
+          AND is_deleted = 0
+        ORDER BY id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="listLatestBySourceAndAgent" databaseId="ainative-source-aware" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId}
+          AND source_type = #{sourceType}
+          AND workitem_id = #{sourceId}
+          AND agent_id = #{agentId}
+          AND (resume_mode IS NULL OR resume_mode &lt;&gt; 'SIDE_INTERACTION')
+          AND is_deleted = 0
+        ORDER BY id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="listSucceededByWorkitem" databaseId="ainative-source-aware" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId} AND workitem_id = #{workitemId}
+          AND source_type = 'WORKITEM'
+          AND status = 'SUCCEEDED' AND is_deleted = 0
+        ORDER BY gmt_create ASC
+    </select>
+
+    <select id="listSucceededByWorkitem" databaseId="ainative-legacy" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId} AND workitem_id = #{workitemId}
+          AND status = 'SUCCEEDED' AND is_deleted = 0
+        ORDER BY gmt_create ASC
+    </select>
+
+    <select id="listSucceededBySource" databaseId="ainative-source-aware" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId}
+          AND source_type = #{sourceType}
+          AND workitem_id = #{sourceId}
+          AND status = 'SUCCEEDED' AND is_deleted = 0
+        ORDER BY gmt_create ASC
+    </select>
+
+    <select id="listStuck" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE is_deleted = 0
+          AND gmt_modified &lt; FROM_UNIXTIME(#{beforeEpochMillis} / 1000)
+          AND status IN
+          <foreach collection="statuses" item="s" open="(" separator="," close=")">#{s}</foreach>
+        ORDER BY gmt_modified ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="listByExecutorAndStatuses" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE executor_id = #{executorId}
+          AND is_deleted = 0
+          AND status IN
+          <foreach collection="statuses" item="s" open="(" separator="," close=")">#{s}</foreach>
+        ORDER BY id ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="listByExecutorAndStatusesAfterId" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE executor_id = #{executorId}
+          AND is_deleted = 0
+          AND id &gt; #{afterId}
+          AND status IN
+          <foreach collection="statuses" item="s" open="(" separator="," close=")">#{s}</foreach>
+        ORDER BY id ASC
+        LIMIT #{limit}
+    </select>
+
+    <!-- Candidate predecessors only. Pick terminal rows too so a late result or a
+         historical missed callback can be reconciled, but the service must re-check
+         durable pause/stop facts and authoritative inventory before releasing. -->
+    <select id="listReleasedPausePredecessors" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch d
+        WHERE d.is_deleted = 0
+          AND d.id &gt; #{afterId}
+          <if test="executorId != null">AND d.executor_id = #{executorId}</if>
+          AND (d.status IN ('PAUSED', 'SUCCEEDED', 'FAILED')
+            OR (d.status = 'CANCELED' AND d.error LIKE 'PAUSE_CONFIRMATION_MISSING:%'))
+          AND EXISTS (
+            SELECT 1 FROM dispatch waiter
+            WHERE waiter.tenant_id = d.tenant_id
+              AND waiter.workitem_id = d.workitem_id
+              AND waiter.status = 'WAITING_FOR_PAUSE'
+              AND waiter.result_summary = CONCAT('waitForDispatchId=', d.id)
+              AND waiter.is_deleted = 0
+          )
+        ORDER BY d.id ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="existsWaitingForPredecessor" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM dispatch
+            WHERE tenant_id = #{tenantId}
+              AND status = 'WAITING_FOR_PAUSE'
+              AND result_summary = CONCAT('waitForDispatchId=', #{predecessorId})
+              AND is_deleted = 0
+        )
+    </select>
+
+    <!-- In-flight dispatches of one workspace, for the logical-delete linkage (D5). Caller supplies
+         the status set so pauseable and non-pauseable rows can be fetched in one pass each. -->
+    <select id="listInFlightByTenant" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId}
+          AND is_deleted = 0
+          AND status IN
+          <foreach collection="statuses" item="s" open="(" separator="," close=")">#{s}</foreach>
+        ORDER BY id ASC
+        LIMIT #{limit}
+    </select>
+
+    <sql id="tenantFilter" databaseId="ainative-source-aware">
+        tenant_id = #{tenantId} AND is_deleted = 0
+        <if test="status != null and status != ''">AND status = #{status}</if>
+        <if test="agentId != null">AND agent_id = #{agentId}</if>
+        <if test="workitemId != null">
+            AND source_type = 'WORKITEM'
+            AND workitem_id = #{workitemId}
+        </if>
+        <if test="since != null">AND gmt_create &gt;= #{since}</if>
+    </sql>
+
+    <sql id="tenantFilter" databaseId="ainative-legacy">
+        tenant_id = #{tenantId} AND is_deleted = 0
+        <if test="status != null and status != ''">AND status = #{status}</if>
+        <if test="agentId != null">AND agent_id = #{agentId}</if>
+        <if test="workitemId != null">AND workitem_id = #{workitemId}</if>
+        <if test="since != null">AND gmt_create &gt;= #{since}</if>
+    </sql>
+
+    <select id="listByTenant" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE <include refid="tenantFilter"/>
+        ORDER BY gmt_create DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByTenant" resultType="long">
+        SELECT COUNT(*) FROM dispatch
+        WHERE <include refid="tenantFilter"/>
+    </select>
+
+    <select id="listWorkitemExecutionsCreatedBetween" databaseId="ainative-source-aware" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId} AND is_deleted = 0
+          AND (source_type = 'WORKITEM' OR source_type IS NULL) AND workitem_id IS NOT NULL
+          AND gmt_create &gt;= #{from} AND gmt_create &lt; #{to}
+        <if test="cursorCreatedAt != null and cursorId != null">
+          AND (gmt_create &lt; #{cursorCreatedAt}
+               OR (gmt_create = #{cursorCreatedAt} AND id &lt; #{cursorId}))
+        </if>
+        ORDER BY gmt_create DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="listWorkitemExecutionsCreatedBetween" databaseId="ainative-legacy" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE tenant_id = #{tenantId} AND is_deleted = 0 AND workitem_id IS NOT NULL
+          AND gmt_create &gt;= #{from} AND gmt_create &lt; #{to}
+        <if test="cursorCreatedAt != null and cursorId != null">
+          AND (gmt_create &lt; #{cursorCreatedAt}
+               OR (gmt_create = #{cursorCreatedAt} AND id &lt; #{cursorId}))
+        </if>
+        ORDER BY gmt_create DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="countActiveByExecutor" resultType="long">
+        SELECT COUNT(*) FROM dispatch
+        WHERE executor_id = #{executorId}
+          AND status IN ('PACKAGING', 'DISPATCHED', 'ACKED', 'RUNNING', 'PAUSING')
+          AND is_deleted = 0
+    </select>
+
+    <select id="listCapacityOccupyingIds" resultType="long">
+        SELECT d.id
+        FROM dispatch d
+        WHERE d.executor_id = #{executorId}
+          AND d.status IN ('PACKAGING', 'DISPATCHED', 'ACKED', 'RUNNING', 'PAUSING')
+          AND d.is_deleted = 0
+        UNION
+        SELECT d.id
+        FROM dispatch d
+        INNER JOIN dispatch_recovery r
+          ON r.tenant_id = d.tenant_id AND r.dispatch_id = d.id
+        WHERE d.executor_id = #{executorId}
+          AND d.is_deleted = 0
+          AND r.stop_pending = 1
+    </select>
+
+    <select id="listOldestPendingByAgent" resultMap="dispatchMap">
+        SELECT <include refid="cols"/> FROM dispatch
+        WHERE agent_id = #{agentId}
+          AND status = 'PENDING'
+          AND is_deleted = 0
+        ORDER BY gmt_create ASC, id ASC
+        LIMIT #{limit}
+    </select>
+
+    <update id="returnDispatchedToPending">
+        UPDATE dispatch
+        SET status = 'PENDING',
+            executor_id = NULL,
+            package_oss_ref = NULL,
+            version = version + 1,
+            modifier_id = #{modifierId}
+        WHERE id = #{id}
+          AND tenant_id = #{tenantId}
+          AND executor_id = #{executorId}
+          AND status = 'DISPATCHED'
+          AND version = #{version}
+          AND is_deleted = 0
+    </update>
+
+    <update id="returnPackagingToPending">
+        UPDATE dispatch
+        SET status = 'PENDING',
+            executor_id = NULL,
+            package_oss_ref = NULL,
+            version = version + 1,
+            modifier_id = #{modifierId}
+        WHERE id = #{id}
+          AND tenant_id = #{tenantId}
+          AND status = 'PACKAGING'
+          AND version = #{version}
+          AND is_deleted = 0
+    </update>
+
+    <update id="returnOwnedActiveToPending">
+        UPDATE dispatch
+        SET status = 'PENDING',
+            executor_id = NULL,
+            package_oss_ref = NULL,
+            result_summary = NULL,
+            error = NULL,
+            version = version + 1,
+            modifier_id = #{modifierId}
+        WHERE id = #{id}
+          AND tenant_id = #{tenantId}
+          AND executor_id = #{executorId}
+          AND status IN ('DISPATCHED', 'ACKED', 'RUNNING')
+          AND version = #{version}
+          AND is_deleted = 0
+    </update>
+
+    <update id="touchOwnedActive">
+        UPDATE dispatch
+        SET gmt_modified = NOW()
+        WHERE tenant_id = #{tenantId}
+          AND executor_id = #{executorId}
+          AND status IN ('PACKAGING', 'DISPATCHED', 'ACKED', 'RUNNING')
+          AND is_deleted = 0
+          AND id IN
+          <foreach collection="dispatchIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </update>
+
+    <update id="failStalePausing">
+        UPDATE dispatch
+        SET status = 'PAUSE_FAILED',
+            error = #{error},
+            version = version + 1,
+            modifier_id = #{modifierId}
+        WHERE id = #{id}
+          AND tenant_id = #{tenantId}
+          AND status = 'PAUSING'
+          AND gmt_modified &lt; FROM_UNIXTIME(#{beforeEpochMillis} / 1000)
+          AND is_deleted = 0
+    </update>
+
+    <update id="claimOwnedActive">
+        UPDATE dispatch
+        SET gmt_modified = NOW()
+        WHERE id = #{id}
+          AND tenant_id = #{tenantId}
+          AND executor_id = #{executorId}
+          AND status IN ('DISPATCHED', 'ACKED', 'RUNNING')
+          AND is_deleted = 0
+    </update>
+
+</mapper>

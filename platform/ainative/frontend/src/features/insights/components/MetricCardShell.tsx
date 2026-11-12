@@ -1,0 +1,55 @@
+import { Tooltip } from 'antd';
+import type { ReactNode } from 'react';
+import { Sparkline } from './Sparkline';
+
+export interface MetricKpi {
+  label: string;
+  value: string;
+}
+
+interface MetricCardShellProps {
+  title: string;
+  icon: ReactNode;
+  color: string;
+  bg: string;
+  kpis: MetricKpi[];
+  trend: number[];
+  tooltip?: ReactNode;
+  kpiLayout?: 'start' | 'center';
+}
+
+export function MetricCardShell({ title, icon, color, bg, kpis, trend, tooltip, kpiLayout = 'start' }: MetricCardShellProps) {
+  return (
+    <div style={{ background: 'var(--cf-panel)', border: '1px solid var(--cf-border)', borderRadius: 10, padding: '18px 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <div aria-hidden="true" style={{ width: 30, height: 30, borderRadius: 7, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color, fontSize: 14 }}>
+          {icon}
+        </div>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--cf-text)' }}>{title}</span>
+        <div style={{ marginLeft: 'auto' }}>
+          <Sparkline data={trend} color={color} />
+        </div>
+      </div>
+      <CardKpis kpis={kpis} tooltip={tooltip} layout={kpiLayout} />
+    </div>
+  );
+}
+
+function CardKpis({ kpis, tooltip, layout }: { kpis: MetricKpi[]; tooltip?: ReactNode; layout: 'start' | 'center' }) {
+  const block = (
+    <div className={`metric-card-kpis${layout === 'center' ? ' is-centered' : ''}`}>
+      {kpis.map((kpi, index) => (
+        <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <span style={{ fontSize: 17, fontWeight: 700, color: 'var(--cf-text)' }}>{kpi.value}</span>
+          <span style={{ fontSize: 11, color: 'var(--cf-muted)' }}>{kpi.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+  if (!tooltip) return block;
+  return (
+    <Tooltip title={tooltip}>
+      <div style={{ cursor: 'help', width: 'fit-content' }}>{block}</div>
+    </Tooltip>
+  );
+}

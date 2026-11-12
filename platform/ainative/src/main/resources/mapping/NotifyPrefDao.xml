@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ainative.notification.NotifyPrefDao">
+    <insert id="insert" parameterType="com.ainative.notification.NotifyPrefDO"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO notify_pref (tenant_id, user_id, type, in_app, dingtalk, feishu)
+        VALUES (#{tenantId}, #{userId}, #{type}, #{inApp}, #{dingtalk}, #{feishu})
+    </insert>
+
+    <select id="listByUser" resultType="com.ainative.notification.NotifyPrefDO">
+        SELECT * FROM notify_pref WHERE tenant_id = #{tenantId} AND user_id = #{userId}
+    </select>
+
+    <select id="findByUserAndType" resultType="com.ainative.notification.NotifyPrefDO">
+        SELECT * FROM notify_pref
+        WHERE tenant_id = #{tenantId} AND user_id = #{userId} AND type = #{type}
+        LIMIT 1
+    </select>
+
+    <update id="update">
+        UPDATE notify_pref SET in_app = #{inApp}, dingtalk = #{dingtalk}, feishu = #{feishu}
+        WHERE id = #{id}
+    </update>
+</mapper>

@@ -1,0 +1,1065 @@
+package com.ainative.taskpackage;
+
+import com.ainative.json.JSON;
+import com.ainative.common.error.BizException;
+import com.ainative.common.error.ErrorCode;
+import com.ainative.storage.ObjectStorage;
+import com.ainative.storage.StoredObject;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.yaml.snakeyaml.Yaml;
+
+import java.io.ByteArrayOutputStream;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.*;
+import java.util.function.Supplier;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
+
+/**
+ * Pure transform: PackageContext -> zip -> ObjectStorage. See detailed-design-02 §7.
+ * B2 populates the context; this class only serializes, zips, uploads, and presigns.
+ */
+public class TaskPackager {
+
+    private static final Logger log = LoggerFactory.getLogger(TaskPackager.class);
+    private static final int DOWNLOAD_TTL_SECONDS = 600;
+    private static final String CHECKPOINT_SOURCE_REVISION_SCHEMA = "ainative.checkpointSourceRevision.v1";
+    private static final String CHECKPOINT_FALLBACK = "checkpointFallback";
+
+    /** Shared with DispatchService so packaging-input failures keep one classification contract. */
+    public static final String MESSAGE_KEY_NO_CHECKOUT = "dispatch.repo_revision.no_checkout";
+    public static final String MESSAGE_KEY_QA_UNPUSHED = "dispatch.repo_revision.qa_unpushed";
+
+    private final ObjectStorage storage;
+    private final String taskPkgBucket;
+    private final Supplier<String> ainativeMcpUrlSupplier;
+    private final TaskPackageSigner signer;
+    private final Clock clock;
+
+    public TaskPackager(ObjectStorage storage, String taskPkgBucket, String publicBaseUrl) {
+        this(storage, taskPkgBucket, configuredMcpUrlSupplier(publicBaseUrl));
+    }
+
+    public TaskPackager(ObjectStorage storage, String taskPkgBucket, Supplier<String> ainativeMcpUrlSupplier) {
+        this(storage, taskPkgBucket, ainativeMcpUrlSupplier, null, Clock.systemUTC());
+    }
+
+    TaskPackager(ObjectStorage storage, String taskPkgBucket, Supplier<String> ainativeMcpUrlSupplier,
+            TaskPackageSigner signer, Clock clock) {
+        this.storage = storage;
+        this.taskPkgBucket = taskPkgBucket;
+        if (ainativeMcpUrlSupplier == null) {
+            throw new IllegalStateException("ainative.public-base-url must be configured");
+        }
+        this.ainativeMcpUrlSupplier = ainativeMcpUrlSupplier;
+        this.signer = signer;
+        this.clock = Objects.requireNonNull(clock, "task package clock");
+    }
+
+    private static Supplier<String> configuredMcpUrlSupplier(String publicBaseUrl) {
+        String mcpUrl = normalizeBaseUrl(publicBaseUrl) + "/api/mcp";
+        return () -> mcpUrl;
+    }
+
+    public TaskPackageResult build(PackageContext ctx) {
+        log.info("taskpackage build start dispatchId={}", ctx.getDispatchId());
+        String packageId = "pkg_" + ctx.getDispatchId();
+        TaskPackageSigner.Envelope envelope = signer == null
+                ? null
+                : signer.envelope(clock.instant().plus(Duration.ofHours(24)));
+        byte[] zip = assembleZip(ctx, envelope);
+        String sha256 = sha256Hex(zip);
+        log.info("taskpackage zip created dispatchId={} size={} sha256={}", ctx.getDispatchId(), zip.length, sha256);
+        String key = ctx.getTenantId() + "/" + ctx.getWorkitemId() + "/" + ctx.getDispatchId() + ".zip";
+        StoredObject stored = storage.put(taskPkgBucket, key, zip);
+        log.info("taskpackage uploaded dispatchId={} ossRef={}", ctx.getDispatchId(), stored.getOssRef());
+        String url = storage.presignGet(stored.getOssRef(), DOWNLOAD_TTL_SECONDS);
+        log.info("taskpackage download url ready dispatchId={} ossRef={} ttlSeconds={} downloadUrl={}",
+                ctx.getDispatchId(), stored.getOssRef(), DOWNLOAD_TTL_SECONDS, url);
+        TaskPackageResult result = new TaskPackageResult(stored.getOssRef(), stored.getMd5(), stored.getSize(), url, sha256,
+                sha256,
+                envelope == null ? null : envelope.issuer(),
+                envelope == null ? null : envelope.signatureRef(),
+                envelope == null ? null : signer.sign(envelope, packageId, sha256),
+                envelope == null ? null : TaskPackageSigner.ALGORITHM,
+                envelope == null ? null : signer.publicKeyBase64(),
+                envelope == null ? null : envelope.expiresAt(),
+                aggregateRepoPolicy(ctx, "allowCommit"), aggregateRepoPolicy(ctx, "allowPush"),
+                aggregateRepoPolicy(ctx, "allowNetwork"), hasCapabilityType(ctx, "HOOK"),
+                hasToolHookCapability(ctx));
+        result.setMcpSecretRefs(collectMcpSecretRefs(ctx));
+        return result;
+    }
+
+    private boolean hasToolHookCapability(PackageContext ctx) {
+        for (Map<String, Object> capability : ctx.getSkills() == null
+                ? List.<Map<String, Object>>of() : ctx.getSkills()) {
+            if (!"HOOK".equalsIgnoreCase(stringValue(capability.get("type")))) {
+                continue;
+            }
+            String ossRef = stringValue(capability.get("packageOssRef"));
+            byte[] archive = ossRef.isEmpty() ? null : storage.get(ossRef);
+            if (archive == null) {
+                throw new IllegalArgumentException("hook package is unavailable: "
+                        + requiredCapabilityName(capability));
+            }
+            String yaml = rootHookDescriptor(archive);
+            Object parsed = new Yaml().load(yaml);
+            if (!(parsed instanceof Map)) {
+                throw new IllegalArgumentException("hook descriptor is invalid");
+            }
+            String trigger = stringValue(((Map<?, ?>) parsed).get("trigger"));
+            if ("beforeTool".equals(trigger) || "afterTool".equals(trigger)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String rootHookDescriptor(byte[] archive) {
+        long expanded = 0;
+        try (ZipInputStream input = new ZipInputStream(new java.io.ByteArrayInputStream(archive))) {
+            ZipEntry entry;
+            while ((entry = input.getNextEntry()) != null) {
+                String name = safeArchivePath(entry.getName());
+                ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    expanded += read;
+                    if (expanded > 50L * 1024L * 1024L) {
+                        throw new IllegalArgumentException("hook package is too large");
+                    }
+                    if ("hook.yaml".equals(name)) {
+                        bytes.write(buffer, 0, read);
+                    }
+                }
+                if ("hook.yaml".equals(name)) {
+                    return bytes.toString(StandardCharsets.UTF_8);
+                }
+            }
+        } catch (java.io.IOException e) {
+            throw new IllegalArgumentException("hook package is invalid", e);
+        }
+        throw new IllegalArgumentException("hook package must contain root hook.yaml");
+    }
+
+    /** Build the capability-only package used by a workitem-independent conversation turn. */
+    public TaskPackageResult buildConversationCapabilities(long tenantId, long conversationId,
+            long turnId, long agentId, long agentVersionId, List<Map<String, Object>> capabilities) {
+        return buildConversationCapabilities(tenantId, conversationId, turnId, agentId, agentVersionId,
+                capabilities, List.of(), null);
+    }
+
+    public TaskPackageResult buildConversationCapabilities(long tenantId, long conversationId,
+            long turnId, long agentId, long agentVersionId, List<Map<String, Object>> capabilities,
+            List<Map<String, Object>> repos, Map<String, Object> repoMap) {
+        PackageContext ctx = new PackageContext();
+        ctx.setTenantId(tenantId);
+        ctx.setWorkitemId(conversationId);
+        ctx.setDispatchId(turnId);
+        ctx.setAgentId(agentId);
+        ctx.setAgentVersionId(agentVersionId);
+        ctx.setSkills(capabilities);
+        ctx.setRepos(repos);
+        ctx.setRepoMap(repoMap);
+        ConversationCapabilityArchive archive = assembleConversationCapabilityZip(ctx, conversationId, turnId);
+        byte[] zip = archive.zip();
+        String sha256 = sha256Hex(zip);
+        String key = tenantId + "/conversations/" + conversationId + "/turns/" + turnId + "-v"
+                + agentVersionId + ".zip";
+        StoredObject stored = storage.put(taskPkgBucket, key, zip);
+        String url = storage.presignGet(stored.getOssRef(), DOWNLOAD_TTL_SECONDS);
+        TaskPackageResult result = new TaskPackageResult(stored.getOssRef(), stored.getMd5(), stored.getSize(), url, sha256,
+                archive.contentHash());
+        result.setMcpSecretRefs(collectMcpSecretRefs(ctx));
+        return result;
+    }
+
+    private ConversationCapabilityArchive assembleConversationCapabilityZip(PackageContext ctx,
+            long conversationId, long turnId) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        Map<String, String> fileDigests = new LinkedHashMap<>();
+        String contentHash;
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            putEntry(zos, "skills.json", JSON.toJSONString(writeCapabilities(zos, ctx, fileDigests)), fileDigests);
+            if (ctx.getRepos() != null && !ctx.getRepos().isEmpty()) {
+                putEntry(zos, "repos.json", JSON.toJSONString(ctx.getRepos()), fileDigests);
+            }
+            if (ctx.getRepoMap() != null) {
+                putEntry(zos, "repo-map.json", JSON.toJSONString(ctx.getRepoMap()), fileDigests);
+            }
+            contentHash = sha256Hex(JSON.toJSONString(new TreeMap<>(fileDigests))
+                    .getBytes(StandardCharsets.UTF_8));
+            Map<String, Object> manifest = new LinkedHashMap<>();
+            manifest.put("schemaVersion", "ainative.taskPackage.v1");
+            manifest.put("packageId", "conversation-capabilities:" + conversationId + ":" + turnId);
+            manifest.put("tenantId", str(ctx.getTenantId()));
+            manifest.put("workitemId", "conversation:" + conversationId);
+            manifest.put("dispatchId", "conversation-turn:" + turnId);
+            manifest.put("attempt", 1);
+            manifest.put("agentId", str(ctx.getAgentId()));
+            manifest.put("agentVersionId", str(ctx.getAgentVersionId()));
+            manifest.put("createdAt", clock.instant().toString());
+            manifest.put("fileDigests", fileDigests);
+            putEntry(zos, "manifest.json", JSON.toJSONString(manifest), fileDigests);
+        } catch (Exception e) {
+            throw new BizException(ErrorCode.PACKAGE_BUILD_FAILED, e);
+        }
+        return new ConversationCapabilityArchive(baos.toByteArray(), contentHash);
+    }
+
+    private record ConversationCapabilityArchive(byte[] zip, String contentHash) {
+    }
+
+    private byte[] assembleZip(PackageContext ctx, TaskPackageSigner.Envelope envelope) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        Map<String, String> fileDigests = new LinkedHashMap<>();
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            List<Map<String, Object>> teammatesManifest = new ArrayList<>();
+            writeTeammates(zos, ctx, teammatesManifest, fileDigests);
+            List<Map<String, Object>> requirementDocumentsManifest = writeRequirementDocuments(zos, ctx, fileDigests);
+
+            putEntry(zos, "workitem.md", nz(ctx.getWorkitemTitle()) + "\n\n" + nz(ctx.getWorkitemContentMd()), fileDigests);
+            if (ctx.getClarificationMd() != null && !ctx.getClarificationMd().isBlank()) {
+                putEntry(zos, "clarification.md", ctx.getClarificationMd(), fileDigests);
+            }
+            if (ctx.getCommentsMd() != null && !ctx.getCommentsMd().isBlank()) {
+                putEntry(zos, "comments.md", ctx.getCommentsMd(), fileDigests);
+            }
+            String commentIndex = writeCommentIndex(zos, ctx.getComments(), fileDigests);
+            if (ctx.getInteractionContextMd() != null && !ctx.getInteractionContextMd().isBlank()) {
+                putEntry(zos, "interaction-context.md", ctx.getInteractionContextMd(), fileDigests);
+            }
+            putEntry(zos, "identity.json", JSON.toJSONString(orEmptyMap(ctx.getIdentity())), fileDigests);
+            putEntry(zos, "repos.json", JSON.toJSONString(Map.of("repos", resolveRepos(ctx))), fileDigests);
+            Map<String, Object> policy = new LinkedHashMap<>();
+            policy.put("allowCommit", aggregateRepoPolicy(ctx, "allowCommit"));
+            policy.put("allowPush", aggregateRepoPolicy(ctx, "allowPush"));
+            policy.put("allowNetwork", aggregateRepoPolicy(ctx, "allowNetwork"));
+            putEntry(zos, "policy.json", JSON.toJSONString(policy), fileDigests);
+            if (ctx.getRepoMap() != null) {
+                putEntry(zos, "repo-map.json", JSON.toJSONString(ctx.getRepoMap()), fileDigests);
+            }
+            List<Map<String, Object>> hooks = new ArrayList<>();
+            putEntry(zos, "skills.json", JSON.toJSONString(writeCapabilities(zos, ctx, fileDigests, hooks)), fileDigests);
+            if (!hooks.isEmpty()) {
+                Map<String, Object> hookDocument = new LinkedHashMap<>();
+                hookDocument.put("schemaVersion", "ainative.hooks.v1");
+                hookDocument.put("hooks", hooks);
+                putEntry(zos, "hooks.json", JSON.toJSONString(hookDocument), fileDigests);
+            }
+            if (ctx.getSdlc() != null || !ctx.isOmitSdlcFileWhenAbsent()) {
+                putEntry(zos, "sdlc.json", JSON.toJSONString(orEmptyMap(ctx.getSdlc())), fileDigests);
+            }
+            if (ctx.getRoster() != null) {
+                putEntry(zos, "roster.json", JSON.toJSONString(ctx.getRoster()), fileDigests);
+            }
+            if (ctx.getWorkitemStatus() != null && !ctx.getWorkitemStatus().isEmpty()) {
+                putEntry(zos, "workitem-status.json", JSON.toJSONString(ctx.getWorkitemStatus()), fileDigests);
+            }
+            if (ctx.getMemory() != null) {
+                for (Map.Entry<String, String> e : ctx.getMemory().entrySet()) {
+                    putEntry(zos, "memory/" + e.getKey() + ".md", nz(e.getValue()), fileDigests);
+                }
+            }
+
+            Map<String, Object> manifest = new LinkedHashMap<>();
+            manifest.put("schemaVersion", "ainative.taskPackage.v1");
+            manifest.put("packageId", "pkg_" + ctx.getDispatchId());
+            if (envelope != null) {
+                manifest.put("issuer", envelope.issuer());
+                manifest.put("signatureRef", envelope.signatureRef());
+                manifest.put("expiresAt", envelope.expiresAt());
+            }
+            manifest.put("capabilityTreeDigest", capabilityTreeDigest(fileDigests));
+            manifest.put("tenantId", str(ctx.getTenantId()));
+            manifest.put("workitemId", str(ctx.getWorkitemId()));
+            manifest.put("workType", nz(ctx.getWorkType()));
+			manifest.put("taskPatternKey", nz(ctx.getTaskPatternKey()));
+			manifest.put("sessionRole", nz(ctx.getSessionRole()));
+			manifest.put("trialId", nz(ctx.getTrialId()));
+			manifest.put("trialArm", nz(ctx.getTrialArm()));
+            manifest.put("dispatchId", str(ctx.getDispatchId()));
+            manifest.put("sourceDispatchId", str(ctx.getSourceDispatchId()));
+            manifest.put("attempt", ctx.getAttempt() == null ? 1 : ctx.getAttempt());
+            manifest.put("idempotencyKey", nz(ctx.getIdempotencyKey()));
+            manifest.put("sdlcId", str(ctx.getSdlcId()));
+            manifest.put("sdlcStepId", str(ctx.getSdlcStepId()));
+            manifest.put("agentId", str(ctx.getAgentId()));
+            manifest.put("agentVersionId", str(ctx.getAgentVersionId()));
+            manifest.put("executorId", str(ctx.getExecutorId()));
+            manifest.put("roleCode", nz(ctx.getRoleCode()));
+            manifest.put("roleName", nz(ctx.getRoleName()));
+            manifest.put("createdAt", clock.instant().toString());
+            manifest.put("fileDigests", fileDigests);
+            manifest.put("teammates", teammatesManifest);
+            manifest.put("requirementDocuments", requirementDocumentsManifest);
+            if (commentIndex != null) {
+                manifest.put("commentIndex", commentIndex);
+            }
+            putEntry(zos, "manifest.json", JSON.toJSONString(manifest), fileDigests);
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BizException(ErrorCode.PACKAGE_BUILD_FAILED, e);
+        }
+        return baos.toByteArray();
+    }
+
+    /** Additive v1 extension: old runtimes keep reading comments.md; new readers can
+     * compare IDs + hashes and fetch individual comments without replaying the whole history.
+     * Sizes are UTF-8 bytes, deliberately not presented as model token usage.
+     */
+    private String writeCommentIndex(ZipOutputStream zos, List<TaskComment> comments,
+            Map<String, String> digests) throws Exception {
+        if (comments == null || comments.isEmpty()) {
+            return null;
+        }
+        List<Map<String, Object>> entries = new ArrayList<>();
+        Set<Long> ids = new HashSet<>();
+        for (TaskComment comment : comments) {
+            if (comment == null || comment.id() <= 0 || !ids.add(comment.id())) {
+                throw new IllegalArgumentException("comment snapshot must have a unique positive id");
+            }
+            String path = "context/comments/" + comment.id() + ".md";
+            byte[] content = nz(comment.contentMd()).getBytes(StandardCharsets.UTF_8);
+            putEntryBytes(zos, path, content, digests);
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("id", String.valueOf(comment.id()));
+            entry.put("authorType", nz(comment.authorType()));
+            entry.put("authorRef", str(comment.authorRef()));
+            entry.put("path", path);
+            entry.put("sha256", digests.get(path));
+            entry.put("sizeBytes", content.length);
+            entries.add(entry);
+        }
+        String path = "context/comments-index.json";
+        Map<String, Object> index = new LinkedHashMap<>();
+        index.put("schemaVersion", "ainative.commentIndex.v1");
+        index.put("comments", entries);
+        putEntry(zos, path, JSON.toJSONString(index), digests);
+        return path;
+    }
+
+    private Map<String, Object> writeCapabilities(ZipOutputStream zos, PackageContext ctx,
+                                                   Map<String, String> fileDigests) throws Exception {
+        return writeCapabilities(zos, ctx, fileDigests, new ArrayList<>());
+    }
+
+    private Map<String, Object> writeCapabilities(ZipOutputStream zos, PackageContext ctx,
+                                                   Map<String, String> fileDigests,
+                                                   List<Map<String, Object>> hooks) throws Exception {
+        List<Map<String, Object>> skills = new ArrayList<>();
+        List<Map<String, Object>> plugins = new ArrayList<>();
+        List<Map<String, Object>> mcpServers = new ArrayList<>();
+        mcpServers.add(builtinPlatformMcp());
+        Set<String> names = new HashSet<>();
+        names.add("MCP:ainative");
+
+        for (Map<String, Object> capability : ctx.getSkills() == null ? List.<Map<String, Object>>of() : ctx.getSkills()) {
+            String type = requiredString(capability, "type").toUpperCase(Locale.ROOT);
+            String name = requiredCapabilityName(capability);
+            // The platform-provided AINative MCP is authoritative. An explicit binding with
+            // the reserved name must not override it or make package creation fail.
+            if ("MCP".equals(type) && "ainative".equalsIgnoreCase(name)) {
+                continue;
+            }
+            if (!names.add(type + ":" + name)) {
+                throw new IllegalArgumentException("duplicate capability " + type + ":" + name);
+            }
+            if ("MCP".equals(type)) {
+                mcpServers.add(mcpDescriptor(capability, name));
+                continue;
+            }
+            if ("HOOK".equals(type)) {
+                String ossRef = stringValue(capability.get("packageOssRef"));
+                if (ossRef.isEmpty()) {
+                    throw new IllegalArgumentException("hook package is required: " + name);
+                }
+                byte[] archive = storage.get(ossRef);
+                if (archive == null) {
+                    throw new IllegalArgumentException("hook package is unavailable: " + name);
+                }
+                String version = String.valueOf(capability.getOrDefault("version", 0));
+                String digest = extractHook(zos, archive, "capabilities/hooks/" + name, fileDigests, name);
+                Map<String, Object> descriptor = new LinkedHashMap<>();
+                descriptor.put("name", name);
+                descriptor.put("version", version);
+                descriptor.put("sha256", digest);
+                descriptor.put("enabled", !Boolean.FALSE.equals(capability.get("required")));
+                hooks.add(descriptor);
+                continue;
+            }
+            if (!"SKILL".equals(type) && !"PLUGIN".equals(type)) {
+                throw new IllegalArgumentException("unsupported capability type " + type);
+            }
+            String base = "capabilities/" + ("SKILL".equals(type) ? "skills/" : "plugins/") + name;
+            Map<String, Object> descriptor = new LinkedHashMap<>();
+            descriptor.put("id", String.valueOf(capability.get("id")));
+            descriptor.put("name", name);
+            descriptor.put("path", base);
+            descriptor.put("version", String.valueOf(capability.getOrDefault("version", 0)));
+            descriptor.put("required", !Boolean.FALSE.equals(capability.get("required")));
+            String ossRef = stringValue(capability.get("packageOssRef"));
+            if (ossRef.isEmpty()) {
+                if (!"SKILL".equals(type)) {
+                    throw new IllegalArgumentException("plugin package is required: " + name);
+                }
+                byte[] generated = generatedSkill(capability, name);
+                putEntryBytes(zos, base + "/SKILL.md", generated, fileDigests);
+                descriptor.put("sha256", sha256Hex(generated));
+            } else {
+                byte[] archive = storage.get(ossRef);
+                if (archive == null) {
+                    if ("SKILL".equals(type) && !storage.exists(ossRef)) {
+                        log.warn("skip deleted skill package capabilityId={} name={} ossRef={}",
+                                capability.get("id"), name, ossRef);
+                        continue;
+                    }
+                    throw new IllegalArgumentException("capability package is unavailable: " + name);
+                }
+                extractCapability(zos, archive, base, fileDigests, "SKILL".equals(type), name);
+                descriptor.put("sha256", sha256Hex(archive));
+            }
+            if ("PLUGIN".equals(type)) {
+                Map<String, Object> config = config(capability);
+                Object providers = config.get("providers");
+                if (!(providers instanceof Collection) || ((Collection<?>) providers).isEmpty()) {
+                    throw new IllegalArgumentException("plugin providers are required: " + name);
+                }
+                descriptor.put("providers", providers);
+                plugins.add(descriptor);
+            } else {
+                skills.add(descriptor);
+            }
+        }
+
+        Map<String, Object> document = new LinkedHashMap<>();
+        document.put("schemaVersion", "ainative.capabilities.v1");
+        document.put("skills", skills);
+        document.put("mcpServers", mcpServers);
+        document.put("plugins", plugins);
+        return document;
+    }
+
+    private Map<String, Object> builtinPlatformMcp() {
+        Map<String, Object> server = new LinkedHashMap<>();
+        server.put("name", "ainative");
+        server.put("transport", "http");
+        server.put("url", normalizeMcpUrl(ainativeMcpUrlSupplier.get()));
+        server.put("authType", "ainative-dispatch");
+        server.put("required", true);
+        return server;
+    }
+
+    private static String normalizeBaseUrl(String publicBaseUrl) {
+        String configured = publicBaseUrl == null ? "" : publicBaseUrl.trim();
+        if (configured.isEmpty()) {
+            throw new IllegalStateException("ainative.public-base-url must be configured");
+        }
+        try {
+            URI uri = URI.create(configured);
+            String scheme = uri.getScheme();
+            if (scheme == null || uri.getHost() == null
+                    || (!"https".equalsIgnoreCase(scheme) && !"http".equalsIgnoreCase(scheme))
+                    || uri.getQuery() != null || uri.getFragment() != null) {
+                throw new IllegalArgumentException();
+            }
+            return configured.replaceAll("/+$", "");
+        } catch (Exception e) {
+            throw new IllegalStateException("ainative.public-base-url must be an absolute http(s) URL", e);
+        }
+    }
+
+    private static String normalizeMcpUrl(String mcpUrl) {
+        String configured = mcpUrl == null ? "" : mcpUrl.trim();
+        if (configured.isEmpty()) {
+            throw new IllegalStateException("ainative MCP URL must be configured");
+        }
+        return configured.replaceAll("/+$", "");
+    }
+
+    private static Map<String, Object> mcpDescriptor(Map<String, Object> capability, String name) {
+        Map<String, Object> descriptor = new LinkedHashMap<>(config(capability));
+        splitSecretReferences(descriptor, "headers", "headerSecretRefs");
+        splitSecretReferences(descriptor, "env", "envSecretRefs");
+        descriptor.put("name", name);
+        descriptor.put("required", !Boolean.FALSE.equals(capability.get("required")));
+        return descriptor;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void splitSecretReferences(Map<String, Object> descriptor, String key, String refsKey) {
+        Object raw = descriptor.get(key);
+        if (!(raw instanceof Map)) return;
+        Map<String, Object> literals = new LinkedHashMap<>();
+        Map<String, String> refs = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : ((Map<?, ?>) raw).entrySet()) {
+            String name = String.valueOf(entry.getKey());
+            Object value = entry.getValue();
+            if (value instanceof Map && "secretRef".equals(String.valueOf(((Map<?, ?>) value).get("kind")))) {
+                Object ref = ((Map<?, ?>) value).get("ref");
+                if (ref == null || String.valueOf(ref).isBlank()) {
+                    throw new IllegalArgumentException("MCP " + key + " secret reference is missing: " + name);
+                }
+                refs.put(name, String.valueOf(ref));
+            } else {
+                literals.put(name, value);
+            }
+        }
+        descriptor.put(key, literals);
+        if (!refs.isEmpty()) descriptor.put(refsKey, refs);
+    }
+
+    private static Map<String, String> collectMcpSecretRefs(PackageContext ctx) {
+        Map<String, String> refs = new LinkedHashMap<>();
+        for (Map<String, Object> capability : ctx.getSkills() == null ? List.<Map<String, Object>>of() : ctx.getSkills()) {
+            if (!"MCP".equalsIgnoreCase(String.valueOf(capability.get("type")))) continue;
+            Map<String, Object> config = config(capability);
+            collectSecretRefs(config.get("headers"), refs);
+            collectSecretRefs(config.get("env"), refs);
+        }
+        return refs;
+    }
+
+    private static void collectSecretRefs(Object raw, Map<String, String> refs) {
+        if (!(raw instanceof Map)) return;
+        for (Object value : ((Map<?, ?>) raw).values()) {
+            if (value instanceof Map && "secretRef".equals(String.valueOf(((Map<?, ?>) value).get("kind")))) {
+                Object ref = ((Map<?, ?>) value).get("ref");
+                if (ref != null && !String.valueOf(ref).isBlank()) refs.put(String.valueOf(ref), String.valueOf(ref));
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> config(Map<String, Object> capability) {
+        Object value = capability.get("config");
+        if (!(value instanceof Map)) {
+            throw new IllegalArgumentException("capability config is required: " + capability.get("name"));
+        }
+        return new LinkedHashMap<>((Map<String, Object>) value);
+    }
+
+    private void extractCapability(ZipOutputStream output, byte[] archive, String base,
+                                   Map<String, String> fileDigests, boolean requireSkillMd, String capabilityName) throws Exception {
+        int entries = 0;
+		int files = 0;
+        long expanded = 0;
+        boolean hasSkillMd = false;
+        try (ZipInputStream input = new ZipInputStream(new java.io.ByteArrayInputStream(archive))) {
+            ZipEntry entry;
+            while ((entry = input.getNextEntry()) != null) {
+                if (++entries > 500) {
+                    throw new IllegalArgumentException("capability package has too many entries");
+                }
+                String rawName = entry.isDirectory() && entry.getName().endsWith("/")
+                        ? entry.getName().substring(0, entry.getName().length() - 1) : entry.getName();
+                String name = safeArchivePath(rawName);
+                if (entry.isDirectory()) {
+                    continue;
+                }
+				files++;
+                ByteArrayOutputStream entryBytes = new ByteArrayOutputStream();
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    expanded += read;
+                    if (expanded > 50L * 1024L * 1024L) {
+                        throw new IllegalArgumentException("capability package is too large");
+                    }
+                    entryBytes.write(buffer, 0, read);
+                }
+                byte[] bytes = entryBytes.toByteArray();
+                if ("SKILL.md".equals(name)) {
+                    hasSkillMd = true;
+                }
+                putEntryBytes(output, base + "/" + name, bytes, fileDigests);
+            }
+        }
+		if (files == 0 || (requireSkillMd && !hasSkillMd)) {
+            throw new IllegalArgumentException(requireSkillMd
+                    ? "skill package must contain root SKILL.md: " + capabilityName
+                    : "plugin package is empty: " + capabilityName);
+        }
+    }
+
+    private String extractHook(ZipOutputStream output, byte[] archive, String base,
+                               Map<String, String> fileDigests, String capabilityName) throws Exception {
+        int entries = 0;
+        int files = 0;
+        long expanded = 0;
+        boolean hasDescriptor = false;
+        Map<String, String> hookDigests = new TreeMap<>();
+        try (ZipInputStream input = new ZipInputStream(new java.io.ByteArrayInputStream(archive))) {
+            ZipEntry entry;
+            while ((entry = input.getNextEntry()) != null) {
+                if (++entries > 500) {
+                    throw new IllegalArgumentException("hook package has too many entries");
+                }
+                String rawName = entry.isDirectory() && entry.getName().endsWith("/")
+                        ? entry.getName().substring(0, entry.getName().length() - 1) : entry.getName();
+                String name = safeArchivePath(rawName);
+                if (entry.isDirectory()) {
+                    continue;
+                }
+                files++;
+                ByteArrayOutputStream entryBytes = new ByteArrayOutputStream();
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    expanded += read;
+                    if (expanded > 50L * 1024L * 1024L) {
+                        throw new IllegalArgumentException("hook package is too large");
+                    }
+                    entryBytes.write(buffer, 0, read);
+                }
+                byte[] bytes = entryBytes.toByteArray();
+                if ("hook.yaml".equals(name)) {
+                    hasDescriptor = true;
+                }
+                hookDigests.put(name, sha256(bytes));
+                putEntryBytes(output, base + "/" + name, bytes, fileDigests);
+            }
+        }
+        if (files == 0 || !hasDescriptor) {
+            throw new IllegalArgumentException("hook package must contain root hook.yaml: " + capabilityName);
+        }
+        java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+        for (Map.Entry<String, String> entry : hookDigests.entrySet()) {
+            digest.update(entry.getKey().getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) 0);
+            digest.update(entry.getValue().getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) '\n');
+        }
+        return "sha256:" + hex(digest.digest());
+    }
+
+    private static String capabilityTreeDigest(Map<String, String> fileDigests) throws Exception {
+        java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+        for (Map.Entry<String, String> entry : new TreeMap<>(fileDigests).entrySet()) {
+            String name = entry.getKey();
+            if (!"skills.json".equals(name) && !"hooks.json".equals(name)
+                    && !name.startsWith("capabilities/")) {
+                continue;
+            }
+            digest.update(name.getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) 0);
+            digest.update(entry.getValue().getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) '\n');
+        }
+        return "sha256:" + hex(digest.digest());
+    }
+
+    private static String safeArchivePath(String raw) {
+        if (raw == null || raw.isBlank() || raw.startsWith("/") || raw.startsWith("\\") || raw.contains("\\")) {
+            throw new IllegalArgumentException("unsafe capability archive path");
+        }
+        // ZIP names are portable logical paths, not paths on the server's filesystem.
+        // Path.of encodes through sun.jnu.encoding and rejects Unicode under ASCII locales.
+        if (raw.indexOf('\0') >= 0 || raw.matches("^[A-Za-z]:.*")) {
+            throw new IllegalArgumentException("unsafe capability archive path " + raw);
+        }
+        for (String segment : raw.split("/", -1)) {
+            if (segment.isEmpty() || segment.equals(".") || segment.equals("..")) {
+                throw new IllegalArgumentException("unsafe capability archive path " + raw);
+            }
+        }
+        return raw;
+    }
+
+    private static String requiredCapabilityName(Map<String, Object> capability) {
+        String name = requiredString(capability, "name");
+        if (name.matches("[A-Za-z0-9][A-Za-z0-9._-]*")) {
+            return name;
+        }
+        String id = requiredString(capability, "id");
+        if (!id.matches("[A-Za-z0-9._-]+")) {
+            throw new IllegalArgumentException("invalid capability id " + id);
+        }
+        return "capability-" + id;
+    }
+
+    private static String requiredString(Map<String, Object> value, String key) {
+        Object raw = value.get(key);
+        String string = raw == null ? "" : String.valueOf(raw).trim();
+        if (string.isEmpty()) {
+            throw new IllegalArgumentException("capability " + key + " is required");
+        }
+        return string;
+    }
+
+    private static String stringValue(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private static byte[] generatedSkill(Map<String, Object> capability, String name) {
+        String description = stringValue(capability.get("description"));
+        Object rawConfig = capability.get("config");
+        String instructions = rawConfig instanceof Map
+                ? stringValue(((Map<?, ?>) rawConfig).get("instructions")) : "";
+        if (instructions.isEmpty()) {
+            instructions = description;
+        }
+        String markdown = "---\nname: " + yamlString(name) + "\ndescription: "
+                + yamlString(description.isEmpty() ? name : description.replace("\n", " "))
+                + "\n---\n\n# " + name + "\n\n" + instructions + "\n";
+        if (rawConfig instanceof Map && ((Map<?, ?>) rawConfig).get("tools") instanceof java.util.Collection<?> tools) {
+            markdown += "\n## Platform MCP tools\n\nUse the supplied authenticated ainative MCP connection. Do not inspect local tokens or probe unauthenticated HTTP endpoints.\n";
+            for (Object tool : tools) if (tool instanceof String toolName) markdown += "- `" + toolName + "`\n";
+        }
+        return markdown.getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static String yamlString(String value) {
+        return "\"" + value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\r", "\\r")
+                .replace("\n", "\\n") + "\"";
+    }
+
+    private void writeTeammates(ZipOutputStream zos, PackageContext ctx,
+                               List<Map<String, Object>> manifestOut,
+                               Map<String, String> digests) throws Exception {
+        if (ctx.getTeammates() == null || ctx.getTeammates().isEmpty()) {
+            return;
+        }
+        Set<String> usedDirs = new HashSet<>();
+        for (TeammateOutput t : ctx.getTeammates()) {
+            String base = t.getRoleName() == null || t.getRoleName().isBlank() ? "unknown" : t.getRoleName();
+            String dir = base;
+            if (usedDirs.contains(dir)) {
+                dir = base + "__" + last6(t.getDispatchId());
+            }
+            usedDirs.add(dir);
+
+            putEntry(zos, "teammates/" + dir + "/conclusion.md", nz(t.getConclusionMd()), digests);
+            if (t.getArtifacts() != null) {
+                for (TaskArtifactRef ref : t.getArtifacts()) {
+                    byte[] bytes = storage.get(ref.getOssRef());
+                    if (bytes != null) {
+                        putEntryBytes(zos, "teammates/" + dir + "/artifacts/" + ref.getName(), bytes, digests);
+                    }
+                }
+            }
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("roleName", t.getRoleName());
+            m.put("agentId", t.getAgentId());
+            m.put("dispatchId", t.getDispatchId());
+            m.put("dir", dir);
+            manifestOut.add(m);
+        }
+    }
+
+    private List<Map<String, Object>> writeRequirementDocuments(ZipOutputStream zos, PackageContext ctx,
+                                                                 Map<String, String> digests) throws Exception {
+        List<Map<String, Object>> manifest = new ArrayList<>();
+        if (ctx.getRequirementDocuments() == null || ctx.getRequirementDocuments().isEmpty()) {
+            return manifest;
+        }
+        Set<String> written = new HashSet<>();
+        for (TaskArtifactRef ref : ctx.getRequirementDocuments()) {
+            String entryName = requirementEntryName(ref.getName());
+            if (!written.add(entryName)) {
+                throw new IllegalArgumentException("duplicate requirement document " + entryName);
+            }
+            byte[] bytes = storage.get(ref.getOssRef());
+            if (bytes == null) {
+                log.error("requirement document missing dispatchId={} workitemId={} name={} ossRef={}",
+                        ctx.getDispatchId(), ctx.getWorkitemId(), ref.getName(), ref.getOssRef());
+                throw new IllegalArgumentException("requirement document is unavailable: " + ref.getName());
+            }
+            String actualSha256 = sha256(bytes);
+            if (ref.getExpectedSha256() != null
+                    && !ref.getExpectedSha256().equalsIgnoreCase(actualSha256)) {
+                throw new IllegalArgumentException("requirement document digest mismatch: " + ref.getName());
+            }
+            putEntryBytes(zos, entryName, bytes, digests);
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("name", entryName);
+            item.put("size", bytes.length);
+            item.put("sha256", actualSha256);
+            manifest.add(item);
+        }
+        return manifest;
+    }
+
+    private static String requirementEntryName(String rawName) {
+        String normalized = safeArchivePath(rawName == null ? "" : rawName.replace('\\', '/'));
+        String filename = normalized.startsWith("requirements/")
+                ? normalized.substring("requirements/".length()) : normalized;
+        if (filename.isBlank() || filename.contains("/")) {
+            throw new IllegalArgumentException("unsafe requirement document path " + rawName);
+        }
+        return "requirements/" + filename;
+    }
+
+    private List<Map<String, Object>> resolveRepos(PackageContext ctx) {
+        List<Map<String, Object>> repos = new ArrayList<>();
+        if (ctx.getRepos() != null) {
+            for (Map<String, Object> repo : ctx.getRepos()) {
+                repos.add(new LinkedHashMap<>(repo));
+            }
+        }
+        Map<String, Map<String, String>> revisions = loadSourceRevisions(ctx);
+        for (Map<String, Object> repo : repos) {
+            Map<String, String> revision = revisions.get(String.valueOf(repo.get("name")));
+            if (revision == null || !validCommit(revision.get("headCommit"))) {
+                continue;
+            }
+            // Only inherited revisions may be abandoned; keep the configured ref
+            // separately so a local-only predecessor commit cannot poison retries.
+            List<String> fallbackRefs = new ArrayList<>();
+            if (validCommit(revision.get("baseCommit"))) {
+                fallbackRefs.add(revision.get("baseCommit"));
+            }
+            String configuredRef = stringValue(repo.get("ref"));
+            fallbackRefs.add(configuredRef == null ? "" : configuredRef);
+            repo.put("sourceRevisionFallbackRefs", fallbackRefs);
+            String localHead = revision.get("headCommit");
+            String checkoutCommit = Boolean.parseBoolean(revision.get(CHECKPOINT_FALLBACK))
+                    ? localHead : revision.get("remoteHeadCommit");
+            // An inconclusive producer-side probe can be resolved by the existing
+            // consumer materializer. Pin the original HEAD and prohibit baseline
+            // fallback: QA must never start against a substitute revision.
+            boolean verifyExactCheckout = isQaRoleCode(ctx.getRoleCode())
+                    && !Boolean.parseBoolean(revision.get(CHECKPOINT_FALLBACK))
+                    && "required".equals(revision.get("checkoutVerification"));
+            if (verifyExactCheckout) {
+                checkoutCommit = localHead;
+                repo.put("pinnedBaseCommit", localHead);
+                repo.put("mode", "eager");
+                repo.remove("sourceRevisionFallbackRefs");
+            }
+            if (!validCommit(checkoutCommit)) {
+                checkoutCommit = revision.get("baseCommit");
+            }
+            if (!validCommit(checkoutCommit)) {
+                throw BizException.keyed(ErrorCode.PACKAGE_BUILD_FAILED,
+                        MESSAGE_KEY_NO_CHECKOUT, new Object[]{repo.get("name")},
+                        "source revision for repo " + repo.get("name")
+                                + " has no remotely materializable checkout commit");
+            }
+            if (isQaRoleCode(ctx.getRoleCode())
+                    && !localHead.equalsIgnoreCase(checkoutCommit)) {
+                throw BizException.keyed(ErrorCode.PACKAGE_BUILD_FAILED,
+                        MESSAGE_KEY_QA_UNPUSHED, new Object[]{repo.get("name")},
+                        "source revision for repo " + repo.get("name")
+                                + " has local HEAD " + localHead + " but no matching pushed branch head; "
+                                + "push the source delivery branch before QA handoff");
+            }
+            repo.put("ref", checkoutCommit);
+            if (!localHead.equalsIgnoreCase(checkoutCommit)) {
+                repo.put("deliveryUnpushedHeadCommit", localHead);
+            }
+            if (!Boolean.parseBoolean(revision.get(CHECKPOINT_FALLBACK))
+                    && validCommit(revision.get("baseCommit"))) {
+                repo.put("deliveryBaseCommit", revision.get("baseCommit"));
+            }
+            if (validBranch(revision.get("branch"))) {
+                repo.put("deliveryBranch", revision.get("branch"));
+            }
+        }
+        return repos;
+    }
+
+    /**
+     * Production squads namespace role codes (for example {@code ROLE_QA}) while legacy squads may use
+     * the bare code, so match the role segment instead of the whole code.
+     */
+    private static boolean isQaRoleCode(String roleCode) {
+        if (roleCode == null) {
+            return false;
+        }
+        String normalized = roleCode.trim();
+        int separator = normalized.lastIndexOf('_');
+        if (separator >= 0) {
+            normalized = normalized.substring(separator + 1);
+        }
+        return "QA".equalsIgnoreCase(normalized);
+    }
+
+    private static boolean aggregateRepoPolicy(PackageContext ctx, String field) {
+        if (ctx.getRepos() == null) {
+            return false;
+        }
+        return ctx.getRepos().stream().anyMatch(repo -> Boolean.TRUE.equals(repo.get(field)));
+    }
+
+    private static boolean hasCapabilityType(PackageContext ctx, String expectedType) {
+        if (ctx.getSkills() == null) {
+            return false;
+        }
+        return ctx.getSkills().stream().anyMatch(capability ->
+                expectedType.equalsIgnoreCase(stringValue(capability.get("type"))));
+    }
+
+    private Map<String, Map<String, String>> loadSourceRevisions(PackageContext ctx) {
+        Map<String, Map<String, String>> revisions = new LinkedHashMap<>();
+        List<TaskArtifactRef> refs = ctx.getSourceRevisionArtifacts();
+        if (refs == null || refs.isEmpty()) {
+            refs = new ArrayList<>();
+            if (ctx.getTeammates() != null) {
+                for (TeammateOutput teammate : ctx.getTeammates()) {
+                    if (teammate.getArtifacts() != null) {
+                        refs.addAll(teammate.getArtifacts());
+                    }
+                }
+            }
+        }
+        for (TaskArtifactRef ref : refs) {
+            String name = ref.getName() == null ? "" : ref.getName().replace('\\', '/');
+            if (!name.endsWith("deliverables/runtime-source-revision.json")) {
+                continue;
+            }
+            byte[] raw = storage.get(ref.getOssRef());
+            if (raw == null) {
+                continue;
+            }
+            try {
+                var document = JSON.parseObject(new String(raw, StandardCharsets.UTF_8));
+                boolean checkpointFallback = CHECKPOINT_SOURCE_REVISION_SCHEMA.equals(
+                        document.getString("schemaVersion"));
+                var repositories = document.getJSONArray("repositories");
+                if (repositories == null) {
+                    continue;
+                }
+                for (int i = 0; i < repositories.size(); i++) {
+                    var revision = repositories.getJSONObject(i);
+                    String repoName = revision.getString("name");
+                    if (repoName == null || repoName.isBlank()) {
+                        continue;
+                    }
+                    Map<String, String> values = revisions.computeIfAbsent(repoName,
+                            ignored -> new LinkedHashMap<>());
+                    if (!validCommit(values.get("headCommit"))
+                            && validCommit(revision.getString("headCommit"))) {
+                        values.put("headCommit", revision.getString("headCommit"));
+                        // Older runtimes never reported remote verification. Preserve their
+                        // HEAD checkout contract; an explicitly empty/invalid field from a
+                        // verification-aware producer must still take the existing fail-closed path.
+                        if (!revision.containsKey("remoteHeadCommit")) {
+                            values.put("remoteHeadCommit", revision.getString("headCommit"));
+                        } else if (validCommit(revision.getString("remoteHeadCommit"))) {
+                            values.put("remoteHeadCommit", revision.getString("remoteHeadCommit"));
+                        }
+                        // Keep the verification instruction attached to the same
+                        // selected HEAD; never borrow it from an older artifact.
+                        if (revision.containsKey("remoteHeadCommit")
+                                && "".equals(revision.getString("remoteHeadCommit"))
+                                && "required".equals(revision.getString("checkoutVerification"))) {
+                            values.put("checkoutVerification", "required");
+                        }
+                        values.put(CHECKPOINT_FALLBACK, Boolean.toString(checkpointFallback));
+                    }
+                    if (!Boolean.parseBoolean(values.get(CHECKPOINT_FALLBACK))
+                            && !validCommit(values.get("baseCommit"))
+                            && validCommit(revision.getString("baseCommit"))) {
+                        values.put("baseCommit", revision.getString("baseCommit"));
+                    }
+                    if (!validBranch(values.get("branch"))
+                            && validBranch(revision.getString("branch"))) {
+                        values.put("branch", revision.getString("branch"));
+                    }
+                }
+            } catch (RuntimeException e) {
+                log.warn("invalid runtime source revision ignored artifact={}", name);
+            }
+        }
+        return revisions;
+    }
+
+    private boolean validCommit(String commit) {
+        return commit != null && commit.matches("[0-9a-fA-F]{40}|[0-9a-fA-F]{64}");
+    }
+
+    private boolean validBranch(String branch) {
+        if (branch == null || branch.isBlank() || branch.length() > 255
+                || branch.startsWith("-") || branch.startsWith("/")
+                || branch.endsWith("/") || branch.endsWith(".") || branch.endsWith(".lock")
+                || branch.contains("..") || branch.contains("@{") || branch.contains("//")
+                || "@".equals(branch)) {
+            return false;
+        }
+        for (int i = 0; i < branch.length(); i++) {
+            char c = branch.charAt(i);
+            if (Character.isISOControl(c) || Character.isWhitespace(c)
+                    || "~^:?*[\\".indexOf(c) >= 0) {
+                return false;
+            }
+        }
+        for (String part : branch.split("/")) {
+            if (part.isEmpty() || part.startsWith(".") || part.endsWith(".lock")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static String last6(String id) {
+        String s = id == null || id.isBlank() ? "0" : id;
+        return s.length() <= 6 ? s : s.substring(s.length() - 6);
+    }
+
+    private void putEntry(ZipOutputStream zos, String name, String content,
+                          Map<String, String> digests) throws Exception {
+        putEntryBytes(zos, name, content.getBytes(StandardCharsets.UTF_8), digests);
+    }
+
+    private void putEntryBytes(ZipOutputStream zos, String name, byte[] bytes,
+                               Map<String, String> digests) throws Exception {
+        ZipEntry entry = new ZipEntry(name);
+        entry.setTime(0L);
+        zos.putNextEntry(entry);
+        zos.write(bytes);
+        zos.closeEntry();
+        if (digests != null && !name.equals("manifest.json")) {
+            digests.put(name, sha256(bytes));
+        }
+    }
+
+    private static String str(Long v) {
+        return v == null ? "" : String.valueOf(v);
+    }
+
+    private static String sha256(byte[] bytes) {
+        return "sha256:" + sha256Hex(bytes);
+    }
+
+    private static String sha256Hex(byte[] bytes) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] d = md.digest(bytes);
+            StringBuilder sb = new StringBuilder();
+            for (byte b : d) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            throw new BizException(ErrorCode.PACKAGE_BUILD_FAILED);
+        }
+    }
+
+    private static String hex(byte[] bytes) {
+        StringBuilder out = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) {
+            out.append(String.format("%02x", value));
+        }
+        return out.toString();
+    }
+
+    private static String nz(String s) {
+        return s == null ? "" : s;
+    }
+
+    private static Map<String, Object> orEmptyMap(Map<String, Object> m) {
+        return m == null ? Map.of() : m;
+    }
+}

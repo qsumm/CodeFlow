@@ -1,0 +1,312 @@
+import { useTranslation } from 'react-i18next';
+import { i18n } from '@/shared/i18n';
+import { formatDateTime } from '@/shared/i18n/format';
+import { useLocalizedValidation } from '@/shared/i18n/useLocalizedValidation';
+import { PageHeading } from '@/shared/ui/PageHeading';
+import { SurfaceCard, Toolbar } from '@/shared/ui/PageShell';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Empty,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Space,
+  Typography,
+  message} from 'antd';
+import { Table } from '@/shared/theme/ThemedTable';
+import {
+  CloseOutlined,
+  CloseCircleOutlined,
+  InfoCircleOutlined,
+  ExclamationCircleOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EyeInvisibleOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  createEnvironmentVariable,
+  deleteEnvironmentVariable,
+  updateEnvironmentVariable,
+} from './api';
+import { environmentVariablesQueryKey, useEnvironmentVariables } from './hooks';
+import type { CreateEnvironmentVariableInput, EnvironmentVariable } from './types';
+import { useAuthStore } from '@/shared/auth/store';
+import { ApiError } from '@/shared/types/common';
+
+const { Text } = Typography;
+
+interface VariableFormValues extends CreateEnvironmentVariableInput {
+  replaceValue?: boolean;
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof ApiError || error instanceof Error ? error.message : fallback;
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : formatDateTime(date, { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false });
+}
+
+export function EnvironmentVariablesPage() {
+  const { t } = useTranslation('environmentVariables');
+  const workspaceId = useAuthStore((state) => state.currentWorkspace?.id);
+  const accessLevel = useAuthStore((state) => state.accessLevel);
+  const isAdmin = accessLevel === 'ADMIN';
+  const queryClient = useQueryClient();
+  const query = useEnvironmentVariables();
+  const boundaryGeneration = useRef(0);
+  const [savingGeneration, setSavingGeneration] = useState<number>();
+  const [deleting, setDeleting] = useState<{ generation: number; id: number }>();
+  const [editing, setEditing] = useState<EnvironmentVariable | 'create'>();
+  const [operationError, setOperationError] = useState<{ error: unknown }>();
+  const [saveError, setSaveError] = useState<{ error: unknown }>();
+  const [form] = Form.useForm<VariableFormValues>();
+  useLocalizedValidation(form, Boolean(editing));
+  const replaceValue = Form.useWatch('replaceValue', form);
+
+  useEffect(() => useAuthStore.subscribe((state, previous) => {
+    if (state.currentWorkspace?.id !== previous.currentWorkspace?.id
+      || state.accessLevel !== previous.accessLevel) {
+      boundaryGeneration.current += 1;
+    }
+  }), []);
+  useEffect(() => () => {
+    boundaryGeneration.current += 1;
+  }, []);
+
+  const showCreate = () => {
+    setOperationError(undefined);
+    setSaveError(undefined);
+    setEditing('create');
+    form.setFieldsValue({ name: '', value: '', description: '', replaceValue: false });
+  };
+
+  const showEdit = (variable: EnvironmentVariable) => {
+    setOperationError(undefined);
+    setSaveError(undefined);
+    setEditing(variable);
+    form.setFieldsValue({
+      name: variable.name,
+      description: variable.description ?? '',
+      value: '',
+      replaceValue: false,
+    });
+  };
+
+  const closeEditor = () => {
+    setEditing(undefined);
+    setSaveError(undefined);
+    form.resetFields();
+  };
+
+  useEffect(() => {
+    setSavingGeneration(undefined);
+    setDeleting(undefined);
+    setEditing(undefined);
+    setOperationError(undefined);
+    setSaveError(undefined);
+    form.resetFields();
+  }, [accessLevel, form, workspaceId]);
+
+  const save = async () => {
+    const generation = boundaryGeneration.current;
+    const formWorkspaceId = workspaceId;
+    const stillAuthorizedForFormWorkspace = () => {
+      const auth = useAuthStore.getState();
+      return generation === boundaryGeneration.current
+        && formWorkspaceId !== undefined
+        && auth.hasAccess('ADMIN')
+        && auth.accessLevel === accessLevel
+        && auth.currentWorkspace?.id === formWorkspaceId;
+    };
+    if (!stillAuthorizedForFormWorkspace()) {
+      closeEditor();
+      return;
+    }
+    setSaveError(undefined);
+    let values: VariableFormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
+    if (!stillAuthorizedForFormWorkspace()) {
+      return;
+    }
+    setSavingGeneration(generation);
+    try {
+      if (editing === 'create') {
+        await createEnvironmentVariable({
+          name: values.name,
+          value: values.value ?? '',
+          description: values.description,
+        });
+        if (!stillAuthorizedForFormWorkspace()) {
+          await queryClient.invalidateQueries({ queryKey: environmentVariablesQueryKey(formWorkspaceId), exact: true });
+          return;
+        }
+        await queryClient.invalidateQueries({ queryKey: environmentVariablesQueryKey(formWorkspaceId), exact: true });
+        if (!stillAuthorizedForFormWorkspace()) return;
+        message.success(i18n.t('environmentVariables:created'));
+      } else if (editing) {
+        const input = values.replaceValue
+          ? { name: values.name, description: values.description, updateValue: true, value: values.value ?? '' }
+          : { name: values.name, description: values.description, updateValue: false };
+        await updateEnvironmentVariable(editing.id, input);
+        if (!stillAuthorizedForFormWorkspace()) {
+          await queryClient.invalidateQueries({ queryKey: environmentVariablesQueryKey(formWorkspaceId), exact: true });
+          return;
+        }
+        await queryClient.invalidateQueries({ queryKey: environmentVariablesQueryKey(formWorkspaceId), exact: true });
+        if (!stillAuthorizedForFormWorkspace()) return;
+        message.success(i18n.t('environmentVariables:updated'));
+      }
+      closeEditor();
+    } catch (error) {
+      if (stillAuthorizedForFormWorkspace()) {
+        setSaveError({ error });
+      }
+    } finally {
+      if (stillAuthorizedForFormWorkspace()) setSavingGeneration(undefined);
+    }
+  };
+
+  const remove = async (variable: EnvironmentVariable) => {
+    const generation = boundaryGeneration.current;
+    const deleteWorkspaceId = workspaceId;
+    const deleteAccessLevel = accessLevel;
+    const isCurrentDelete = () => {
+      const auth = useAuthStore.getState();
+      return generation === boundaryGeneration.current
+        && deleteWorkspaceId !== undefined
+        && deleteAccessLevel === 'ADMIN'
+        && auth.currentWorkspace?.id === deleteWorkspaceId
+        && auth.accessLevel === deleteAccessLevel;
+    };
+    if (!isCurrentDelete()) return;
+    setOperationError(undefined);
+    setDeleting({ generation, id: variable.id });
+    try {
+      await deleteEnvironmentVariable(variable.id);
+      if (!isCurrentDelete()) {
+        await queryClient.invalidateQueries({ queryKey: environmentVariablesQueryKey(deleteWorkspaceId), exact: true });
+        return;
+      }
+      await queryClient.invalidateQueries({ queryKey: environmentVariablesQueryKey(deleteWorkspaceId), exact: true });
+      if (!isCurrentDelete()) return;
+      message.success(i18n.t('environmentVariables:deleted'));
+    } catch (error) {
+      if (isCurrentDelete()) {
+        setOperationError({ error });
+      }
+    } finally {
+      if (isCurrentDelete()) setDeleting(undefined);
+    }
+  };
+
+  const refresh = () => {
+    void query.refetch();
+  };
+
+  return (
+    <div className="cfds-list-layout">
+      <PageHeading title={t('title')} description={t('description')}
+        extra={isAdmin && <Button aria-label={t('add')} type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={showCreate}>{t('add')}</Button>} />
+
+
+      {operationError && <Alert closable={{ closeIcon: <CloseOutlined aria-hidden="true" />, 'aria-label': t('dismissError') }} type="error" showIcon icon={<CloseCircleOutlined aria-hidden="true" />} message={t('operationFailed')} description={errorMessage(operationError.error, t('deleteFailed'))} onClose={() => setOperationError(undefined)} />}
+      {query.isError && <Alert type="error" showIcon icon={<CloseCircleOutlined aria-hidden="true" />} message={t('loadFailed')} description={errorMessage(query.error, t('retryLater'))} />}
+
+      <SurfaceCard>
+        <Toolbar
+          actions={<Button aria-label={t('refresh')} icon={<ReloadOutlined aria-hidden="true" />} loading={query.isFetching} onClick={refresh}>{t('refresh')}</Button>}
+        />
+        <div className="cfds-table-wrap">
+          <Table<EnvironmentVariable>
+          rowKey="id"
+          size="middle"
+          loading={{ spinning: query.isLoading, tip: t('loading') }}
+          dataSource={query.data ?? []}
+          pagination={false}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('empty')} /> }}
+          scroll={{ x: 760 }}
+          columns={[
+            { title: t('name'), dataIndex: 'name', align: 'left', width: 190, render: (name: string) => <Text code>{name}</Text> },
+            {
+              title: t('value'),
+              width: 280,
+              render: (_, variable) => <Text code>{variable.value}</Text>,
+            },
+            { title: t('notes'), dataIndex: 'description', align: 'left', render: (value: string | null) => value || <Text type="secondary">—</Text> },
+            { title: t('updatedAt'), dataIndex: 'gmtModified', width: 180, render: formatDate },
+            ...(isAdmin ? [{
+              title: t('actions'),
+              key: 'actions',
+              width: 130,
+              render: (_: unknown, variable: EnvironmentVariable) => <Space size={4}>
+                <Button type="text" size="small" icon={<EditOutlined aria-hidden="true" />} aria-label={t('editNamed', { name: variable.name })} onClick={() => showEdit(variable)} />
+                <Popconfirm
+                  icon={<ExclamationCircleOutlined aria-hidden="true" />}
+                  title={t('confirmDeleteNamed', { name: variable.name })}
+                  description={t('irreversible')}
+                  okText={t('confirmDelete')}
+                  cancelText={t('cancel')}
+                  okButtonProps={{
+                    danger: true,
+                    loading: deleting?.generation === boundaryGeneration.current && deleting.id === variable.id,
+                    'aria-label': t('confirmDelete'),
+                  }}
+                  onConfirm={() => remove(variable)}
+                >
+                  <Button danger type="text" size="small" icon={<DeleteOutlined aria-hidden="true" />} aria-label={t('deleteNamed', { name: variable.name })} />
+                </Popconfirm>
+              </Space>,
+            }] : []),
+          ]}
+          />
+        </div>
+      </SurfaceCard>
+
+      <Modal
+        closable={{ closeIcon: <CloseOutlined aria-hidden="true" />, 'aria-label': t('close') }}
+        title={editing === 'create' ? t('add') : t('edit')}
+        open={Boolean(editing)}
+        okText={editing === 'create' ? t('create') : t('save')}
+        cancelText={t('cancel')}
+        confirmLoading={savingGeneration === boundaryGeneration.current}
+        okButtonProps={{ 'aria-label': editing === 'create' ? t('create') : t('save') }}
+        onOk={() => void save()}
+        onCancel={closeEditor}
+        destroyOnHidden
+      >
+        {saveError && <Alert type="error" showIcon icon={<CloseCircleOutlined aria-hidden="true" />} message={t('saveFailedTitle')} description={errorMessage(saveError.error, t('saveFailed'))} style={{ marginTop: 20 }} />}
+        <Form form={form} layout="vertical" preserve={false} className="cfds-form" style={{ marginTop: 20 }}>
+          <Form.Item label={t('name')} name="name" rules={[{ required: true, whitespace: true, message: t('nameRequired') }, { pattern: /^[A-Za-z_][A-Za-z0-9_]*$/, message: t('namePattern') }]}>
+            <Input autoComplete="off" placeholder={t('namePlaceholder')} maxLength={128} />
+          </Form.Item>
+          {editing !== 'create' && <Form.Item name="replaceValue" valuePropName="checked">
+            <Checkbox>{t('replaceValue')}</Checkbox>
+          </Form.Item>}
+          {(editing === 'create' || replaceValue) && <Form.Item label={editing === 'create' ? t('value') : t('newValue')} name="value">
+            <Input.Password iconRender={(visible) => <Button type="text" htmlType="button" aria-label={visible ? t('hideValue') : t('showValue')}
+              icon={visible ? <EyeOutlined aria-hidden="true" /> : <EyeInvisibleOutlined aria-hidden="true" />}
+              style={{ padding: 0, width: 16, height: 16 }} />} autoComplete="new-password" placeholder={t('valuePlaceholder')} />
+          </Form.Item>}
+          {editing !== 'create' && !replaceValue && <Alert type="info" showIcon icon={<InfoCircleOutlined aria-hidden="true" />} message={t('unchangedValue')} style={{ marginBottom: 20 }} />}
+          <Form.Item label={t('notes')} name="description" rules={[{ max: 512, message: t('descriptionLimit') }]}>
+            <Input.TextArea rows={3} placeholder={t('descriptionPlaceholder')} />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  );
+}
