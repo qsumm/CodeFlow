@@ -11,7 +11,7 @@
 [![Backend](https://img.shields.io/badge/backend-Spring_Boot_3.3_v2-6DB33F.svg)](platform/ainative/server-v2)
 [![Frontend](https://img.shields.io/badge/frontend-React_18-61DAFB.svg)](platform/ainative/frontend)
 [![Runtime](https://img.shields.io/badge/runtime-Python_3.11%2B_stdlib-3776AB.svg)](runtime/)
-[![Tests](https://img.shields.io/badge/tests-11408_green-3fb950.svg)](#-测试)
+[![E2E](https://img.shields.io/badge/E2E-54_cases_green-3fb950.svg)](#-测试)
 
 [快速开始](#-快速开始) · [架构](#-架构) · [禅道闭环](#-禅道闭环已真实验证) · [文档](#-文档)
 
@@ -99,19 +99,21 @@ docker compose up -d          # MySQL 8 + 后端 v2(前端随 jar 内嵌,自动�
 ## 🏗 架构
 
 ```
-platform/    平台:服务端(Spring Boot + MyBatis + MySQL)+ 前端(React,随库 dist)
-runtime/     执行器运行时:WebSocket 接单、任务包解压、驱动 Agent CLI、产物回传
-tests/       执行器运行时测试(pytest)
-scripts/     执行器注册、存储桶创建、禅道 E2E 验证
-docs/        用户手册、集成指南、SDLC 设计、发布清单、平台协议文档
+platform/            平台:后端 server-v2(Spring Boot 3.3,JDBC 零 ORM,+ 前端 React 内嵌 SPA)
+└── server-v2/       后端源码(全量重写版,~1.4 万行,零 v1 衍生)
+runtime/             执行器运行时:WebSocket 接单、任务包解压、驱动 Agent CLI、产物回传
+tests/               执行器运行时测试(pytest)
+scripts/             执行器注册、存储桶创建、禅道/TAPD E2E 验证
+docs/                用户手册、集成指南、SDLC 设计、发布清单、平台协议文档
 ```
 
 设计要点:
 
 - **协议先行** — WebSocket 帧协议(心跳/派发/结果/重连)、任务包 schema(`ainative.taskPackage.v1`)、MCP 工具契约均有文档(`platform/ainative/docs/`)
-- **可靠投递** — outbox 先落库后发送、幂等键唯一约束、断线重连、attempt 递增恢复
-- **产物面门禁** — 预构建 dist 随库分发,关键特性带产物指纹测试,防止「源码有、产物无」
-- **缺陷管理纪律** — 所有缺陷一律登记,根因写到「为什么写错」的层面,禁止修完不回归
+- **可靠投递** — 离线派发落 PENDING 重放、断线自动重连、attempt 递增、同分钟判重防抖
+- **产物完整性** — deliverables 递归回传(含子目录,`__` 编码保留结构),下载带 sha256 校验
+- **多源工单** — 禅道 / TAPD 同骨架接入:自动轮询拉取入库,交付备注按 provider 回写源头
+- **零 ORM** — 后端只用 JdbcTemplate,SQL 全手写可见;数据库 MySQL 8 / OceanBase seekdb 双兼容
 
 ## 🔗 禅道闭环(已真实验证)
 
@@ -125,15 +127,15 @@ docs/        用户手册、集成指南、SDLC 设计、发布清单、平台�
 # 执行器运行时(pytest,标准库零依赖)
 python -m pytest tests/ -q
 
-# 平台后端(容器内 Maven)
-docker run --rm -v "$PWD/platform/ainative":/workspace -w /workspace \
-  maven:3.9.9-eclipse-temurin-21 mvn -B -ntp test
+# 平台后端 E2E(54 用例,跨全部 10 个域,直达运行中的实例)
+python3 platform/ainative/server-v2/scripts/e2e_smoke.py http://localhost:7001
 
-# 平台前端(vitest)
-cd platform/ainative/frontend && npm ci && npm run test:run
+# 权限矩阵(16 用例:匿名/成员/管理员三段式)
+python3 platform/ainative/server-v2/scripts/permission_matrix.py http://localhost:7001
 ```
 
-当前基线:后端 **7612** / 前端 **3745** / 运行时 **51** 用例全绿。
+当前基线:E2E **54/54** · 权限矩阵 **16/16** · 运行时 **51** · 影子对比(与旧版并行读)6/7 一致 ·
+发布镜像冒烟 **8/8** · 全站交互遍历 45 页。
 
 ## 📚 文档
 
