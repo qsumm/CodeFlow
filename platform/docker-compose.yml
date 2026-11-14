@@ -1,26 +1,38 @@
-# CodeFlow v2:v2 后端(同 jar 内嵌前端)+ MySQL 8。
-# schema 由 compose 自动初始化(docs/seekdb-schema-v1-*.sql 按序执行)。
+# CodeFlow v2:seekdb(MySQL 协议兼容)+ 应用(同 jar 内嵌前端 SPA)。
+# schema 由 db-init 任务在 seekdb 就绪后自动导入(docs/seekdb-schema-v1-*.sql)。
 services:
-  mysql:
-    image: mysql:8.0
+  seekdb:
+    image: docker.m.daocloud.io/oceanbase/seekdb:latest
     environment:
-      MYSQL_DATABASE: ainative_v2
-      MYSQL_USER: ainative
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-root-me}
-      TZ: Asia/Shanghai
+      ROOT_PASSWORD: ""
     ports:
-      - "33060:3306"
+      - "2882:2881"
     volumes:
-      - mysql-data:/var/lib/mysql
-      - ./ainative/docs/seekdb-schema-v1-core.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
-      - ./ainative/docs/seekdb-schema-v1-rest.sql:/docker-entrypoint-initdb.d/002-schema.sql:ro
-      - ./ainative/docs/seekdb-schema-v1-workitem.sql:/docker-entrypoint-initdb.d/003-schema.sql:ro
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pchange-root-me"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
+      - seekdb-data:/var/lib/seekdb
+    restart: unless-stopped
+    networks: [community]
+
+  # schema 初始化:等 seekdb 就绪后按序导入三份 DDL(core → rest → workitem)
+  db-init:
+    image: mysql:8.0
+    entrypoint: >
+      sh -c '
+      echo "waiting for seekdb…" &&
+      for i in $$(seq 1 60); do
+        mysql -h seekdb -P 2881 -u root -e "SELECT 1" >/dev/null 2>&1 && break
+        sleep 5
+      done &&
+      mysql -h seekdb -P 2881 -u root -e "CREATE DATABASE IF NOT EXISTS ainative_v2" &&
+      mysql -h seekdb -P 2881 -u root ainative_v2 < /schema/001-core.sql &&
+      mysql -h seekdb -P 2881 -u root ainative_v2 < /schema/002-rest.sql &&
+      mysql -h seekdb -P 2881 -u root ainative_v2 < /schema/003-workitem.sql &&
+      echo "schema ready (106 tables)"
+      '
+    volumes:
+      - ./ainative/docs/seekdb-schema-v1-core.sql:/schema/001-core.sql:ro
+      - ./ainative/docs/seekdb-schema-v1-rest.sql:/schema/002-rest.sql:ro
+      - ./ainative/docs/seekdb-schema-v1-workitem.sql:/schema/003-workitem.sql:ro
+    restart: "no"
     networks: [community]
 
   app:
@@ -28,11 +40,11 @@ services:
       context: ./ainative
       dockerfile: APP-META/docker-config/Dockerfile
     environment:
-      DB_HOST: mysql
-      DB_PORT: 3306
+      DB_HOST: seekdb
+      DB_PORT: 2881
       DB_NAME: ainative_v2
-      DB_USER: ainative
-      DB_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+      DB_USER: root
+      DB_PASSWORD: ""
       AINATIVE_JWT_SECRET: ${AINATIVE_JWT_SECRET:-please-change-this-secret-at-least-32-chars}
       AINATIVE_PUBLIC_BASE_URL_V2: ${PUBLIC_BASE_URL:-http://localhost:7001}
       AINATIVE_DOWNLOAD_SECRET: ${DOWNLOAD_SECRET:-please-change-download-secret}
@@ -41,12 +53,15 @@ services:
     volumes:
       - app-artifacts:/app/artifacts
     depends_on:
-      mysql:
-        condition: service_healthy
+      seekdb:
+        condition: service_started
+      db-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
     networks: [community]
 
 volumes:
-  mysql-data:
+  seekdb-data:
   app-artifacts:
 
 networks:

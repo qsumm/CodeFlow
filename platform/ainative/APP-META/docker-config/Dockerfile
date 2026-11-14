@@ -29,8 +29,8 @@ COPY --from=build /workspace/target/*.jar /app/app.jar
 
 ENV TZ=Asia/Shanghai \
     SERVER_PORT=7001 \
-    DB_HOST=mysql \
-    DB_PORT=3306 \
+    DB_HOST=seekdb \
+    DB_PORT=2881 \
     DB_NAME=ainative_v2 \
     DB_USER=ainative \
     DB_PASSWORD=change-me \
