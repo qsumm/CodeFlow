@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 
@@ -136,8 +137,11 @@ def handoff_to_human(cfg, workitem_id: int, user_id: int | None = None) -> None:
 
 def reassign_to_agent(cfg, workitem_id: int, agent_id: int) -> None:
     """把工单重新指派给下一角色的数字员工(平台合法操作,等价于项目经理在页面点指派)。"""
-    cfg.extra_env.setdefault("AINATIVE_API_BASE_URL", "http://localhost:7001")
-    _state["base"] = cfg.extra_env["AINATIVE_API_BASE_URL"]
+    # 上游缺陷:setdefault 在 cfg.extra_env 已含该键时不会覆盖,但当 env 传入但
+    # extra_env 未收集时会被强制成 7001;这里以显式传入优先,避免打到错误实例。
+    base = cfg.extra_env.get("AINATIVE_API_BASE_URL") or os.environ.get("AINATIVE_API_BASE_URL") or "http://localhost:7001"
+    cfg.extra_env["AINATIVE_API_BASE_URL"] = base
+    _state["base"] = base
     body = {"assigneeType": "AGENT", "assigneeRef": agent_id}
     def call(tok):
         return _put(f"/api/workitems/{workitem_id}/assignee", body, tok)

@@ -1,7 +1,7 @@
 {
   "name": "ymai-codeflow",
-  "version": "0.3.32",
-  "description": "CodeFlow executor runtime launcher — connects AI worker daemons to the CodeFlow platform (Python 3.11+ required).",
+  "version": "0.3.33",
+  "description": "CodeFlow executor runtime launcher — connects AI worker daemons to the CodeFlow platform (Python 3.11+ required). 0.3.33: artifact upload (recursive, dir-preserving), env-merged config, conversation dedup key fix, host login-state preservation.",
   "bin": {
     "ymai-codeflow": "./bin/cli.js"
   },
@@ -9,9 +9,17 @@
     "bin/",
     "runtime/"
   ],
-  "keywords": ["codeflow", "executor", "agent", "ai", "delivery"],
+  "keywords": [
+    "codeflow",
+    "executor",
+    "agent",
+    "ai",
+    "delivery"
+  ],
   "license": "Apache-2.0",
-  "engines": { "node": ">=16" },
+  "engines": {
+    "node": ">=16"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/qsumm/CodeFlow.git"

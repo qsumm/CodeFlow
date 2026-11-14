@@ -101,6 +101,7 @@ def write_conversation_settings(workdir: Path, env: dict, mcp_token: str | None)
     settings = {"env": picked}
     if mcp_token:
         settings["permissions"] = {"allow": ["mcp__ainative", "mcp__ainative__*"]}
+    workdir.mkdir(parents=True, exist_ok=True)
     path = workdir / "claude-settings.json"
     path.write_text(json.dumps(settings, ensure_ascii=False), encoding="utf-8")
     return str(path)

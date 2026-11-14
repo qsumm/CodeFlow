@@ -140,8 +140,9 @@ class ClaudeCodeProvider:
         if ctx.emit_event:
             ctx.emit_event(started)
 
+        _mt = max(self.max_turns or 0, 300)  # DEF-P-002:真实产品开发 40 轮不够,兜底 300
         argv = build_command(self.cli_binary, self._prompt(step, ctx.capsule),
-                             session_ref=ctx.prev_session, max_turns=self.max_turns,
+                             session_ref=ctx.prev_session, max_turns=_mt,
                              system_prompt=self._system_prompt(ctx.capsule),
                              allowed_tools=self.allowed_tools,
                              settings_file=getattr(self, "_settings_path", None))
@@ -199,7 +200,24 @@ class ClaudeCodeProvider:
                                               proc.returncode)
             summary = summary or f"claude exited with {proc.returncode}"
 
-        artifacts = sorted((ctx.workdir.root / "deliverables").glob("*"))
+        if state != "completed":
+            try:
+                # 调试落盘目录:可用 AINATIVE_DEBUG_DIR 覆盖,默认用户目录下 ~/.ainative/debug
+                _dbg = Path(os.environ.get("AINATIVE_DEBUG_DIR")
+                            or (Path.home() / ".ainative" / "debug"))
+                _dbg.mkdir(parents=True, exist_ok=True)
+                (_dbg / f"step-fail-{int(time.time())}.log").write_text(
+                    f"argv={argv}\n\nSTDOUT_TAIL:\n{(out or b'').decode('utf-8','replace')[-4000:]}\n\nSTDERR_TAIL:\n{(err or b'').decode('utf-8','replace')[-2500:]}\n\nerror={error}\n")
+            except Exception:
+                pass
+
+        # 递归收集产物:glob("*") 只取顶层,子目录(static/tests/docs 等)会整体丢失,
+        # 部署时缺资源(实测:周报工具缺 static/ 无法启动)。过滤缓存与隐藏目录。
+        _deliv = ctx.workdir.root / "deliverables"
+        artifacts = sorted(p for p in _deliv.rglob("*")
+                           if p.is_file()
+                           and "__pycache__" not in p.parts
+                           and not any(part.startswith(".") for part in p.relative_to(_deliv).parts))
         completed = RuntimeEvent("step.completed", step.step_order, step.step_id, step.name,
                                  message=state)
         if ctx.emit_event:

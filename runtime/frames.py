@@ -38,14 +38,21 @@ def task_handoff(dispatch_id: int, workitem_id: int, to: str, to_type: str = "AG
             "to": to, "toType": to_type, "nextRole": next_role, "reason": reason}
 
 
-def heartbeat(owned=None, running=None, capacity=1) -> dict:
-    """dispatch_inventory_v1 心跳:owned/running 必须为数组且 owned ⊇ running(§reconciler 契约)。"""
+def heartbeat(owned=None, running=None, capacity=1, client_started_at=None) -> dict:
+    """dispatch_inventory_v1 心跳:owned/running 必须为数组且 owned ⊇ running(§reconciler 契约)。
+
+    client_started_at:守护进程启动时刻(UTC ISO-8601)。进程级字段——重连不重置,
+    只有守护进程重启才会产生新值;平台用它渲染「最近启动」。旧服务端未知字段会忽略。
+    """
     owned = sorted(int(x) for x in (owned or []))
     running = sorted(int(x) for x in (running or []))
-    return {"type": "HEARTBEAT", "protocolFeatures": list(PROTOCOL_FEATURES),
-            "dispatchInventoryReady": True, "maxConcurrentDispatches": max(1, int(capacity)),
-            "ownedDispatchIds": owned, "runningDispatchIds": running,
-            "runningConversationTurnIds": []}
+    frame = {"type": "HEARTBEAT", "protocolFeatures": list(PROTOCOL_FEATURES),
+             "dispatchInventoryReady": True, "maxConcurrentDispatches": max(1, int(capacity)),
+             "ownedDispatchIds": owned, "runningDispatchIds": running,
+             "runningConversationTurnIds": []}
+    if client_started_at:
+        frame["clientStartedAt"] = client_started_at
+    return frame
 
 
 def decode_dispatch(payload: dict) -> dict:

@@ -3,14 +3,20 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ainative"
-version = "0.1.0"
+name = "ainative-runtime"
+version = "0.3.33"
 description = "AINative 开源执行器运行时:多步 SDLC 执行、任意 Anthropic 兼容模型接入、全链路可审计"
-readme = "README.md"
+readme = "runtime/README.md"
 requires-python = ">=3.11"
-license = { text = "Proprietary" }
+license = { text = "Apache-2.0" }
 authors = [{ name = "qsumm" }]
-dependencies = []  # 纯标准库,按 00 号规范 NFR-1
+dependencies = []  # 纯标准库,零三方依赖
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
 
 [project.scripts]
 ainative = "runtime.daemon:main"

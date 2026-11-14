@@ -32,3 +32,11 @@ runtime-local.env
 runtime-cr.env
 # 实录原始素材(体量大,成片 mp4 随库)
 docs/demo/realtake*/*.webm
+
+# Python 构建产物(发布物走 GitHub Release 附件,不进 git)
+dist/
+build/
+*.egg-info/
+*.whl
+*.tar.gz
+!runtime-npm/ymai-codeflow-*.tgz

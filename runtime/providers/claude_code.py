@@ -140,14 +140,22 @@ class ClaudeCodeProvider:
         if ctx.emit_event:
             ctx.emit_event(started)
 
+        _mt = max(self.max_turns or 0, 300)  # DEF-P-002:真实产品开发 40 轮不够,兜底 300
         argv = build_command(self.cli_binary, self._prompt(step, ctx.capsule),
-                             session_ref=ctx.prev_session, max_turns=self.max_turns,
+                             session_ref=ctx.prev_session, max_turns=_mt,
                              system_prompt=self._system_prompt(ctx.capsule),
                              allowed_tools=self.allowed_tools,
                              settings_file=getattr(self, "_settings_path", None))
         env = dict(os.environ)
         env.update(self.extra_env)
+        # 隔离工作区的同时保住宿主登录态:claude 按 HOME 找 ~/.claude(settings.json/凭据),
+        # 每次 attempt 的全新 HOME 里没有登录态,必然报 "Not logged in · Please run /login"
+        # (实录:全栈开发连续两派秒败的根因)。CLAUDE_CONFIG_DIR 指回真实配置目录;
+        # 调用方显式传入的优先,API-Key 等环境变量照常经 prepare() 的 --settings 生效。
+        real_home = env.get("HOME")
         env["HOME"] = str(ctx.workdir.root)
+        if real_home:
+            env.setdefault("CLAUDE_CONFIG_DIR", str(Path(real_home) / ".claude"))
         # start_new_session: claude 必须拥有独立进程组,否则超时 killpg 会连同 daemon 一起杀死(DEF-009)
         proc = subprocess.Popen(argv, cwd=str(ctx.workdir.root), env=env,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -192,7 +200,24 @@ class ClaudeCodeProvider:
                                               proc.returncode)
             summary = summary or f"claude exited with {proc.returncode}"
 
-        artifacts = sorted((ctx.workdir.root / "deliverables").glob("*"))
+        if state != "completed":
+            try:
+                # 调试落盘目录:可用 AINATIVE_DEBUG_DIR 覆盖,默认用户目录下 ~/.ainative/debug
+                _dbg = Path(os.environ.get("AINATIVE_DEBUG_DIR")
+                            or (Path.home() / ".ainative" / "debug"))
+                _dbg.mkdir(parents=True, exist_ok=True)
+                (_dbg / f"step-fail-{int(time.time())}.log").write_text(
+                    f"argv={argv}\n\nSTDOUT_TAIL:\n{(out or b'').decode('utf-8','replace')[-4000:]}\n\nSTDERR_TAIL:\n{(err or b'').decode('utf-8','replace')[-2500:]}\n\nerror={error}\n")
+            except Exception:
+                pass
+
+        # 递归收集产物:glob("*") 只取顶层,子目录(static/tests/docs 等)会整体丢失,
+        # 部署时缺资源(实测:周报工具缺 static/ 无法启动)。过滤缓存与隐藏目录。
+        _deliv = ctx.workdir.root / "deliverables"
+        artifacts = sorted(p for p in _deliv.rglob("*")
+                           if p.is_file()
+                           and "__pycache__" not in p.parts
+                           and not any(part.startswith(".") for part in p.relative_to(_deliv).parts))
         completed = RuntimeEvent("step.completed", step.step_order, step.step_id, step.name,
                                  message=state)
         if ctx.emit_event:

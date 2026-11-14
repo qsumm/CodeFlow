@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import urllib.request
 import signal
 import socket
 import sys
@@ -10,6 +11,7 @@ import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -42,6 +44,8 @@ def make_provider(cfg: Config):
 
 class Daemon:
     def __init__(self, cfg: Config):
+        # 进程级启动时刻:随每次心跳上报,重连不重置;平台据此渲染「最近启动」。
+        self.started_at = datetime.now(timezone.utc).isoformat()
         self.cfg = cfg
         self.store = StateStore(str(Path(cfg.data_dir) / "runtime-state.db"))
         self.provider = make_provider(cfg)
@@ -55,7 +59,10 @@ class Daemon:
         self._conv_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="conversation")
         self._conv_inflight: set[int] = set()
         self._conv_inflight_lock = threading.Lock()
-        self._conv_done: dict[int, dict] = {}  # turn_id -> ack frame(重投幂等重放)
+        # (conversation_id, turn_id) -> ack frame(重投幂等重放)
+        # 键必须是复合的:turn_id 是会话内序号,不同会话都会从 1 开始,
+        # 单键会让新会话的 turn 1 命中旧会话的留底帧而被误判为重投。
+        self._conv_done: dict[tuple[int, int], dict] = {}
         self._heartbeat_thread: threading.Thread | None = None
 
     def _start_heartbeat_once(self) -> None:
@@ -125,7 +132,8 @@ class Daemon:
             try:
                 with self._inflight_lock:
                     inflight = sorted(self._inflight)
-                self.send_frame(frames.heartbeat(inflight, inflight, self.cfg.max_concurrent), durable=False)
+                self.send_frame(frames.heartbeat(inflight, inflight, self.cfg.max_concurrent,
+                                                 client_started_at=self.started_at), durable=False)
             except (WsClosed, OSError, socket.timeout) as e:
                 log.warn("heartbeat.send_failed", error=str(e))
             self._stop.wait(self.cfg.heartbeat_sec)
@@ -228,6 +236,11 @@ class Daemon:
                 steps_done += 1
             success = not failures
             summary = ("; ".join(summaries) if success else "; ".join(failures))[:2000] or "completed"
+            if success and artifacts:
+                try:
+                    self._upload_artifacts(dispatch, artifacts)
+                except Exception as e:  # noqa: BLE001 - 上传失败不改变派发结论
+                    log.warn("artifact.upload_failed", dispatch_id=did, error=repr(e))
             self.send_frame(frames.task_result(did, success, summary, ""), dispatch_id=did)
             self.store.mark_terminal(did, success)
             log.info("dispatch.finished", dispatch_id=did, success=success, steps_done=steps_done)
@@ -388,21 +401,53 @@ class Daemon:
             log.warn("recovery.active_run", dispatch_id=did, state=row["state"])
             self.store.mark_terminal(did, False)
 
+
+    def _upload_artifacts(self, dispatch: dict, artifacts) -> None:
+        """把 deliverables/ 产物回传平台(协议扩展:artifactUploadUrl)。"""
+        url = dispatch.get("artifactUploadUrl")
+        if not url:
+            return
+        boundary = "----ainative" + str(int(time.time() * 1000))
+        for path in artifacts:
+            if not path.is_file():
+                continue
+            data = path.read_bytes()
+            # 相对 deliverables 的路径(保留目录结构);文件名含子路径时平台侧会清洗
+            parts = path.parts
+            root = path.parent
+            if "deliverables" in parts:
+                root = Path(*parts[: parts.index("deliverables") + 1])
+            rel = path.relative_to(root)
+            # Tomcat 会剥 filename 中的路径分隔符:用 __ 编码目录结构
+            name = str(rel).replace("/", "__").encode()
+            body = b""
+            body += f"--{boundary}\r\n".encode()
+            body += f'Content-Disposition: form-data; name="file"; filename="{name.decode()}"\r\n'.encode()
+            body += b"Content-Type: application/octet-stream\r\n\r\n"
+            body += data + b"\r\n"
+            body += f"--{boundary}--\r\n".encode()
+            req = urllib.request.Request(url, data=body, method="POST")
+            req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                resp.read()
+            log.info("artifact.uploaded", dispatch_id=dispatch.get("dispatchId"), name=path.name, size=len(data))
+
     # ---- 澄清会话(CONVERSATION_TURN) ----
 
     def on_conversation_turn(self, turn: dict) -> None:
-        turn_id = turn["turn_id"]
+        conv_key = (int(turn["conversation_id"]), int(turn["turn_id"]))
         with self._conv_inflight_lock:
-            if turn_id in self._conv_inflight:
-                log.info("conversation.duplicate_inflight", turn_id=turn_id)
+            if conv_key in self._conv_inflight:
+                log.info("conversation.duplicate_inflight", turn_id=turn["turn_id"],
+                         conversation_id=turn["conversation_id"])
                 return
-            done = self._conv_done.get(turn_id)
+            done = self._conv_done.get(conv_key)
             if done is not None:
                 # 平台重投同一回合:重放既有 ACK(dispatchAttempt 回显为新帧值),不重跑
-                self._conv_inflight.add(turn_id)
+                self._conv_inflight.add(conv_key)
                 self._conv_pool.submit(self._reack_conversation_turn, turn, done)
                 return
-            self._conv_inflight.add(turn_id)
+            self._conv_inflight.add(conv_key)
         self._conv_pool.submit(self._run_conversation_turn, turn)
 
     def _reack_conversation_turn(self, turn: dict, done: dict) -> None:
@@ -414,7 +459,7 @@ class Daemon:
             log.info("conversation.reacked", turn_id=turn["turn_id"])
         finally:
             with self._conv_inflight_lock:
-                self._conv_inflight.discard(turn["turn_id"])
+                self._conv_inflight.discard((int(turn["conversation_id"]), int(turn["turn_id"])))
 
     def _run_conversation_turn(self, turn: dict) -> None:
         from . import conversation as conv
@@ -456,7 +501,7 @@ class Daemon:
                                     session_id=result.get("session_id"),
                                     usage=result.get("usage"), model=result.get("model"))
             with self._conv_inflight_lock:
-                self._conv_done[turn_id] = ack  # 幂等重放留底
+                self._conv_done[(int(turn["conversation_id"]), turn_id)] = ack  # 幂等重放留底
                 while len(self._conv_done) > 200:  # 只留最近回合,防无界增长
                     self._conv_done.pop(next(iter(self._conv_done)))
             self.send_frame(ack, durable=False)
@@ -526,7 +571,9 @@ def main(argv=None) -> int:
     if args.debug:
         overrides["RUNTIME_LOG_LEVEL"] = "debug"
     try:
-        cfg = load_config(overrides)
+        # 合并进程环境:CLI overrides 优先。原实现只传 overrides,容器里靠环境变量
+        # 注入的 AINATIVE_API_BASE_URL / RUNTIME_DATA_DIR / ANTHROPIC_* 全部丢失。
+        cfg = load_config(dict(os.environ) | overrides)
     except ConfigError as e:
         log.error("config.invalid", error=str(e))
         return 2
