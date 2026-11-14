@@ -23,7 +23,15 @@ import java.util.Set;
 @Component
 public class PermissionInterceptor implements HandlerInterceptor {
     private static final Set<String> PUBLIC_PREFIXES = Set.of(
-            "/api/auth/register", "/api/auth/login", "/api/platform/branding/public", "/api/daemon/");
+            "/api/auth/register", "/api/auth/login", "/api/platform/branding/public", "/api/daemon/",
+            // 登录页在未登录状态下就要渲染 SSO 入口;SSO 会话探测同样免登录(内部按需返回未认证)
+            "/api/auth/sso/",
+            // 刷新令牌自身鉴权(access 过期时无登录态),登出同理
+            "/api/auth/refresh", "/api/auth/logout",
+            // MCP 用个人令牌自鉴权(sha256 比对 ag_mcp_token),不走登录态
+            "/api/mcp",
+            // 工单分享视图:凭 cv_share 令牌读取,免登录态(链接本身即凭证)
+            "/api/share/workitems/");
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -65,6 +73,10 @@ public class PermissionInterceptor implements HandlerInterceptor {
             return write;
         }
         if (path.startsWith("/api/audit-logs")) {
+            return true;
+        }
+        // 备份/恢复属于运维高危操作,整组仅管理员可用(含只读列表与下载)。
+        if (path.startsWith("/api/platform/backups") || path.startsWith("/api/workspaces/current/backups")) {
             return true;
         }
         if (path.startsWith("/api/scheduled-tasks")) {

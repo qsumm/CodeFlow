@@ -42,6 +42,11 @@ public class WorkitemDao {
 
     private final JdbcTemplate jdbc;
 
+    /** 供同域服务做跨表名字解析(负责人/创建者)。 */
+    public JdbcTemplate jdbc() {
+        return jdbc;
+    }
+
     public WorkitemDao(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }

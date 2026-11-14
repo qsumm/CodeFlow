@@ -30,12 +30,15 @@ public class ExecutorWsHandler extends TextWebSocketHandler {
     private final ExecutorHub hub;
     private final JdbcTemplate jdbc;
     private final DispatchDao dispatchDao;
+    private final com.ainative.v2.cv.ConversationTurnService conversationTurns;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public ExecutorWsHandler(ExecutorHub hub, JdbcTemplate jdbc, DispatchDao dispatchDao) {
+    public ExecutorWsHandler(ExecutorHub hub, JdbcTemplate jdbc, DispatchDao dispatchDao,
+                             com.ainative.v2.cv.ConversationTurnService conversationTurns) {
         this.hub = hub;
         this.jdbc = jdbc;
         this.dispatchDao = dispatchDao;
+        this.conversationTurns = conversationTurns;
     }
 
     @Override
@@ -61,6 +64,15 @@ public class ExecutorWsHandler extends TextWebSocketHandler {
         session.getAttributes().put("executorId", executorId);
         jdbc.update("UPDATE ag_executor SET status='ONLINE', last_heartbeat=NOW() WHERE id=?", executorId);
         hub.register(executorId, session);
+        // 上线即补投:运行器离线期间用户发的对话回合已落库为 PENDING,这里重放。
+        try {
+            Long agentId = jdbc.queryForObject("SELECT agent_id FROM ag_executor WHERE id=?", Long.class, executorId);
+            if (agentId != null) {
+                conversationTurns.replayPending(executorId, agentId);
+            }
+        } catch (Exception e) {
+            log.warn("conversation replay on connect failed executorId={} error={}", executorId, e.getMessage());
+        }
     }
 
     @Override
@@ -91,6 +103,11 @@ public class ExecutorWsHandler extends TextWebSocketHandler {
                 case "TASK_RESULT" -> onResult(frame);
                 case "TASK_HANDOFF" -> log.info("executor handoff executorId={} dispatchId={} to={}",
                         executorId, frame.path("dispatchId").asLong(), frame.path("to").asText(""));
+                case "CONVERSATION_TURN_ACK" -> {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> payload = mapper.convertValue(frame, Map.class);
+                    conversationTurns.handleAck(payload);
+                }
                 default -> log.debug("executor frame ignored type={}", type);
             }
         } catch (Exception e) {
@@ -133,13 +150,7 @@ public class ExecutorWsHandler extends TextWebSocketHandler {
     }
 
     static String sha256(String value) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            return Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString(md.digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
+        return TokenHash.sha256(value);
     }
 
     private static Map<String, String> parseQuery(URI uri) {

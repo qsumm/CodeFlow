@@ -197,10 +197,6 @@ public class PfService {
         return dao.evolutionProposals();
     }
 
-    public List<Map<String, Object>> backups() {
-        return dao.backups();
-    }
-
     public List<Map<String, Object>> debugLogs(long ticketId) {
         return dao.debugLogs(ticketId);
     }

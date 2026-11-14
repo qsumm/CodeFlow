@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -38,6 +39,40 @@ public class SdlcController {
     public ApiResult<List<Map<String, Object>>> list() {
         RequestContext.requireUserId();
         return ApiResult.ok(service.listSdlcs());
+    }
+
+    /**
+     * 分页版流水线列表(前端 listSdlcTemplatesPage 翻页用)。
+     * 列表契约:SdlcTemplate[stepCount 代替 steps],启用状态映射 ENABLED。
+     */
+    @GetMapping("/page")
+    public ApiResult<com.ainative.v2.common.PageResult<Map<String, Object>>> page(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "100") int size) {
+        RequestContext.requireUserId();
+        List<Map<String, Object>> all = service.listSdlcs().stream()
+                .map(SdlcController::templateShape).toList();
+        int total = all.size();
+        int limit = Math.max(1, Math.min(size, 100));
+        int from = Math.max(0, (Math.max(page, 1) - 1) * limit);
+        List<Map<String, Object>> rows = all.subList(Math.min(from, total), Math.min(from + limit, total));
+        return ApiResult.ok(new com.ainative.v2.common.PageResult<>(rows, total, page, limit));
+    }
+
+    private static Map<String, Object> templateShape(Map<String, Object> s) {
+        Map<String, Object> m = new java.util.LinkedHashMap<>(s);
+        Object status = m.get("status");
+        m.put("status", "ACTIVE".equals(status) ? "ENABLED" : status);
+        Object desc = m.get("description");
+        m.put("description", desc == null ? "" : desc);
+        m.put("workType", null);
+        m.put("isDefault", 0);
+        m.put("entryStepId", null);
+        Object steps = m.get("steps");
+        m.put("stepCount", steps instanceof List<?> l ? l.size() : 0);
+        m.put("squadIds", null);
+        m.put("squadNames", null);
+        return m;
     }
 
     @GetMapping("/{id}")

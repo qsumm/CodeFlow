@@ -25,6 +25,13 @@ public class McpTokenController {
         this.service = service;
     }
 
+    @GetMapping("/tools")
+    public ApiResult<List<Map<String, Object>>> toolsList(
+            com.ainative.v2.mcp.McpToolService tools) {
+        RequestContext.requireUserId();
+        return ApiResult.ok(tools.listTools());
+    }
+
     @GetMapping
     public ApiResult<List<Map<String, Object>>> list() {
         return ApiResult.ok(service.listMcpTokens(RequestContext.requireUserId()));

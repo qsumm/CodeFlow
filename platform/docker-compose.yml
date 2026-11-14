@@ -1,8 +1,10 @@
+# CodeFlow v2:v2 后端(同 jar 内嵌前端)+ MySQL 8。
+# schema 由 compose 自动初始化(docs/seekdb-schema-v1-*.sql 按序执行)。
 services:
   mysql:
     image: mysql:8.0
     environment:
-      MYSQL_DATABASE: ainative
+      MYSQL_DATABASE: ainative_v2
       MYSQL_USER: ainative
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-root-me}
@@ -11,8 +13,9 @@ services:
       - "33060:3306"
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./ainative/docs/ainative-schema.sql:/docker-entrypoint-initdb.d/001-ainative-schema.sql:ro
-      - ./ainative/docs/ainative-community-templates.sql:/docker-entrypoint-initdb.d/002-ainative-templates.sql:ro
+      - ./ainative/docs/seekdb-schema-v1-core.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+      - ./ainative/docs/seekdb-schema-v1-rest.sql:/docker-entrypoint-initdb.d/002-schema.sql:ro
+      - ./ainative/docs/seekdb-schema-v1-workitem.sql:/docker-entrypoint-initdb.d/003-schema.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pchange-root-me"]
       interval: 5s
@@ -20,39 +23,31 @@ services:
       retries: 30
     networks: [community]
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "63790:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-    networks: [community]
-
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
+  app:
+    build:
+      context: ./ainative
+      dockerfile: APP-META/docker-config/Dockerfile
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ainative_v2
+      DB_USER: ainative
+      DB_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+      AINATIVE_JWT_SECRET: ${AINATIVE_JWT_SECRET:-please-change-this-secret-at-least-32-chars}
+      AINATIVE_PUBLIC_BASE_URL_V2: ${PUBLIC_BASE_URL:-http://localhost:7001}
+      AINATIVE_DOWNLOAD_SECRET: ${DOWNLOAD_SECRET:-please-change-download-secret}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "7001:7001"
     volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
+      - app-artifacts:/app/artifacts
+    depends_on:
+      mysql:
+        condition: service_healthy
     networks: [community]
 
 volumes:
   mysql-data:
-  minio-data:
+  app-artifacts:
 
 networks:
   community:
-    name: ainative-community

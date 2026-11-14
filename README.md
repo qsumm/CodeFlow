@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/platform-MIT-blue.svg)](platform/ainative/LICENSE)
 [![License: Apache-2.0](https://img.shields.io/badge/runtime-Apache--2.0-green.svg)](LICENSE)
-[![Backend](https://img.shields.io/badge/backend-Spring_Boot_2.7-6DB33F.svg)](platform/ainative)
+[![Backend](https://img.shields.io/badge/backend-Spring_Boot_3.3_v2-6DB33F.svg)](platform/ainative/server-v2)
 [![Frontend](https://img.shields.io/badge/frontend-React_18-61DAFB.svg)](platform/ainative/frontend)
 [![Runtime](https://img.shields.io/badge/runtime-Python_3.11%2B_stdlib-3776AB.svg)](runtime/)
 [![Tests](https://img.shields.io/badge/tests-11408_green-3fb950.svg)](#-测试)
@@ -66,34 +66,20 @@ CodeFlow 把这些**工程化环节**做成平台:数字员工小队按可编排
 
 > **前置**:Docker;其余构建工具均在容器内。执行器需要 Python 3.11+。
 
-### ① 启动平台(约 3 分钟)
+### ① 启动平台(约 5 分钟,一条命令)
 
 ```bash
 git clone https://github.com/qsumm/CodeFlow.git && cd CodeFlow/platform
-cp runtime.env.example runtime.env      # 密码默认可跑通本机/内网;公网部署先全部替换
-docker compose --env-file runtime.env up -d mysql redis minio
-docker compose exec -T mysql mysql -uainative -pchange-me ainative < docs/ainative-schema.sql   # 首次必做:导入全量建表
-bash build.sh                            # 复用随库 dist 构建,无需本地 Node/JDK(跳过测试编译)
-docker run -d --name codeflow --network ainative-community \
-  --env-file runtime.env -p 7001:7001 codeflow:local
-# 可选:导入预置小队模板(全链路研发协作等 7 个)
-# docker compose exec -T mysql mysql -uainative -pchange-me ainative < docs/ainative-community-templates.sql
+docker compose up -d          # MySQL 8 + 后端 v2(前端随 jar 内嵌,自动建表)
 ```
 
 打开 **http://localhost:7001** — 注册的第一个账号即平台管理员。
 
-> **低配机器(≤2G 内存)注意**:源码构建(mvn 编译 1286 个源文件)至少需要
-> **2G 内存 + 2G swap**,否则会触发系统 OOM(实测 1.8G ECS 连同机 MySQL 一起被杀)。
-> 内存不足时:① 加 swap:`fallocate -l 4G /swapfile2 && mkswap /swapfile2 && swapon /swapfile2`;
-> ② 或在 4G+ 机器上构建后 `docker save | load` 导入低配机运行。
-
-<details>
-<summary>compose 网络说明</summary>
-
-compose 会自动创建网络 `ainative-community`,应用容器需加入同一网络。
-若用 `docker compose up -d` 全量启动(含应用),则无需手动建网。
-
-</details>
+> **架构说明**:后端为 v2 全量重写(Spring Boot 3.3,零 v1 衍生,~1.4 万行),
+> 数据库 schema 自动初始化(docs/seekdb-schema-v1-*.sql,MySQL 8 兼容),
+> 产物/附件存本地卷 `/app/artifacts`(对象存储可插拔)。
+> 公网部署请替换 `MYSQL_PASSWORD` / `AINATIVE_JWT_SECRET` / `DOWNLOAD_SECRET`
+> 并设置 `PUBLIC_BASE_URL` 为实际对外地址(MCP 地址与执行器启动命令会随之生成)。
 
 ### ② 跑起执行器(必做,全程界面操作)
 

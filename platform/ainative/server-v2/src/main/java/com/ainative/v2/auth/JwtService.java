@@ -26,14 +26,26 @@ public class JwtService {
         this.ttlSeconds = ttlSeconds;
     }
 
+    private static final long REFRESH_TTL_SECONDS = 30L * 24 * 3600;
+
     public String issue(long userId, Long workspaceId) {
+        return issue(userId, workspaceId, ttlSeconds, "access");
+    }
+
+    /** 刷新令牌:有效期 30 天,typ=refresh;不能直接当访问令牌用(verifyClaims 会拒)。 */
+    public String issueRefresh(long userId, Long workspaceId) {
+        return issue(userId, workspaceId, REFRESH_TTL_SECONDS, "refresh");
+    }
+
+    private String issue(long userId, Long workspaceId, long ttl, String typ) {
         try {
             Map<String, Object> header = Map.of("alg", "HS512");
             Map<String, Object> claims = new LinkedHashMap<>();
             claims.put("sub", String.valueOf(userId));
             claims.put("uid", userId);
+            claims.put("typ", typ);
             claims.put("iat", Instant.now().getEpochSecond());
-            claims.put("exp", Instant.now().getEpochSecond() + ttlSeconds);
+            claims.put("exp", Instant.now().getEpochSecond() + ttl);
             if (workspaceId != null) {
                 claims.put("workspace", workspaceId);
             }
@@ -68,6 +80,43 @@ public class JwtService {
                 return null;
             }
             Map<?, ?> claims = mapper.readValue(Base64.getUrlDecoder().decode(parts[1]), Map.class);
+            Object exp = claims.get("exp");
+            if (exp instanceof Number n && n.longValue() < Instant.now().getEpochSecond()) {
+                return null;
+            }
+            Object uid = claims.get("uid");
+            if (!(uid instanceof Number n)) {
+                return null;
+            }
+            // 刷新令牌不得冒充访问令牌
+            if ("refresh".equals(String.valueOf(claims.get("typ")))) {
+                return null;
+            }
+            Object ws = claims.get("workspace");
+            return new TokenClaims(n.longValue(), ws instanceof Number w ? w.longValue() : null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 校验刷新令牌;访问令牌或伪造令牌返回 null。 */
+    public TokenClaims verifyRefresh(String token) {
+        if (token == null) {
+            return null;
+        }
+        String[] parts = token.split("\\.");
+        if (parts.length != 3) {
+            return null;
+        }
+        try {
+            byte[] expected = sign(parts[0] + "." + parts[1]);
+            if (!MessageDigest.isEqual(expected, Base64.getUrlDecoder().decode(parts[2]))) {
+                return null;
+            }
+            Map<?, ?> claims = mapper.readValue(Base64.getUrlDecoder().decode(parts[1]), Map.class);
+            if (!"refresh".equals(String.valueOf(claims.get("typ")))) {
+                return null;
+            }
             Object exp = claims.get("exp");
             if (exp instanceof Number n && n.longValue() < Instant.now().getEpochSecond()) {
                 return null;

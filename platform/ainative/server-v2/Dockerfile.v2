@@ -8,6 +8,9 @@ RUN --mount=type=cache,target=/root/.m2 mvn -q -B -DskipTests package
 
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
+# 与数据库时区对齐:调度判重、cron 触发都按平台统一时区计算。
+ENV TZ=Asia/Shanghai
+ENV JAVA_OPTS="-Duser.timezone=Asia/Shanghai -Dfile.encoding=UTF-8"
 COPY --from=build /app/target/*.jar /app/server-v2.jar
 EXPOSE 7011
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/server-v2.jar"]

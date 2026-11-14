@@ -19,7 +19,7 @@ import java.util.Map;
 @RequestMapping("/api/squads")
 public class SquadController {
     public record SquadRequest(String name, String description) {}
-    public record MemberRequest(Long agentId, String roleCode) {}
+    public record MemberRequest(Long agentId, String roleCode, java.util.List<Long> agentIds) {}
 
     private final SquadService service;
 
@@ -67,6 +67,15 @@ public class SquadController {
     @PostMapping("/{id}/members")
     public ApiResult<Void> addMember(@PathVariable long id, @RequestBody MemberRequest req) {
         RequestContext.requireUserId();
+        // 前端批量入口传 agentIds:[..],早期接口传单个 agentId;两者都接受。
+        if (req.agentIds() != null && !req.agentIds().isEmpty()) {
+            for (Long agentId : req.agentIds()) {
+                if (agentId != null) {
+                    service.addMember(id, agentId, req.roleCode());
+                }
+            }
+            return ApiResult.ok(null);
+        }
         if (req.agentId() == null) {
             throw new com.ainative.v2.common.BizException("10001", "成员不能为空");
         }
@@ -82,8 +91,11 @@ public class SquadController {
     }
 
     @PostMapping("/{id}/copy")
-    public ApiResult<Map<String, Object>> copy(@PathVariable long id) {
+    public ApiResult<Map<String, Object>> copy(@PathVariable long id,
+                                               @RequestBody(required = false) Map<String, Object> body) {
         RequestContext.requireUserId();
-        return ApiResult.ok(service.copySquad(id));
+        String requestId = body == null || body.get("requestId") == null
+                ? null : String.valueOf(body.get("requestId"));
+        return ApiResult.ok(service.copySquad(id, requestId));
     }
 }

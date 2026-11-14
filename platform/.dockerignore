@@ -19,3 +19,10 @@ ainative/frontend/node_modules
 # 注意:不能排除 ainative/target 【目录本身】—— Docker 不允许在父目录被排除时
 # 再用 `!` 重新包含其中的文件,那样 COPY 会因找不到 jar 而失败。
 !ainative/target/ainative.jar
+
+# ── v2 发布形态补充 ──
+# 前端依赖与构建缓存(构建阶段内自行 npm ci)
+ainative/frontend/node_modules
+ainative/frontend/dist
+# v2 后端构建产物
+ainative/server-v2/target

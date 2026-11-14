@@ -72,6 +72,12 @@ public class AssetController {
         return ApiResult.ok(service.saveConclusion(id, req.contentMd()));
     }
 
+    @GetMapping("/repos/relations")
+    public ApiResult<List<Map<String, Object>>> relationsFrontendPath() {
+        RequestContext.requireUserId();
+        return ApiResult.ok(service.relations());
+    }
+
     @GetMapping("/repo-relations")
     public ApiResult<List<Map<String, Object>>> relations() {
         RequestContext.requireUserId();

@@ -13,9 +13,11 @@ import java.util.Map;
 @Service
 public class CvService {
     private final CvDao dao;
+    private final ConversationTurnService turnService;
 
-    public CvService(CvDao dao) {
+    public CvService(CvDao dao, ConversationTurnService turnService) {
         this.dao = dao;
+        this.turnService = turnService;
     }
 
     public Map<String, Object> clarification(long ticketId) {
@@ -82,20 +84,13 @@ public class CvService {
         return out;
     }
 
-    @Transactional
+    /**
+     * 发送用户消息:落库 USER 回合并把回合下发给在线运行器(真实 AI 执行)。
+     */
     public Map<String, Object> appendUserTurn(long chatId, String contentMd) {
-        dao.findChat(chatId).orElseThrow(() -> new BizException("16001", "会话不存在"));
-        if (contentMd == null || contentMd.isBlank()) {
-            throw new BizException("10001", "消息不能为空");
-        }
-        int seq = dao.nextTurnSeq(chatId);
-        long id = dao.appendTurn(chatId, seq, "USER", contentMd);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", id);
-        out.put("seq", seq);
-        out.put("role", "USER");
-        out.put("contentMd", contentMd);
-        return out;
+        CvDao.Chat chat = dao.findChat(chatId).orElseThrow(() -> new BizException("16001", "会话不存在"));
+        return turnService.send(chatId, chat.agentId(),
+                com.ainative.v2.common.RequestContext.requireUserId(), contentMd);
     }
 
     public List<Map<String, Object>> events(long chatId) {

@@ -43,6 +43,9 @@ public class ExPullService {
     @Transactional
     public Map<String, Object> pull(long bindingId) {
         ExDao.Binding binding = dao.findBinding(bindingId).orElseThrow(() -> new RuntimeException("绑定不存在"));
+        // 拉取可能由调度线程触发(无登录态,RequestContext 回落默认工作区),
+        // 所有写操作必须以绑定自身的工作区为准,否则需求会落到错误项目。
+        long bindingWorkspace = binding.workspaceId();
         String baseUrl = binding.configJson() == null ? null : extractBaseUrl(binding.configJson());
         if (baseUrl == null || baseUrl.isBlank()) {
             throw new RuntimeException("绑定缺少 baseUrl 配置");
@@ -66,12 +69,12 @@ public class ExPullService {
             }
             String title = item.path("title").asText("外部条目 " + externalId);
             String body = item.path("description").asText("");
-            Long stateId = mappedState(bindingId, item.path("status").asText(""));
-            Long flowId = mappedFlow(bindingId);
-            Long ticketId = insertTicket(title, body, "ZENTAO", externalId, flowId, stateId);
-            jdbc.update("INSERT INTO ex_item_link (workspace_id, binding_id, external_id, ticket_id) VALUES (" + ws() + ",?,?,?)",
+            Long stateId = mappedState(bindingId, item.path("status").asText(""), bindingWorkspace);
+            Long flowId = mappedFlow(bindingId, bindingWorkspace);
+            Long ticketId = insertTicket(title, body, "ZENTAO", externalId, flowId, stateId, bindingWorkspace);
+            jdbc.update("INSERT INTO ex_item_link (workspace_id, binding_id, external_id, ticket_id) VALUES (" + bindingWorkspace + ",?,?,?)",
                     bindingId, externalId, ticketId);
-            jdbc.update("INSERT INTO wi_journal (workspace_id, ticket_id, event_type, actor_type, from_val, to_val) VALUES (" + ws() + ",?, 'EXTERNAL_IMPORT', 'SYSTEM', NULL, ?)",
+            jdbc.update("INSERT INTO wi_journal (workspace_id, ticket_id, event_type, actor_type, from_val, to_val) VALUES (" + bindingWorkspace + ",?, 'EXTERNAL_IMPORT', 'SYSTEM', NULL, ?)",
                     ticketId, externalId);
             imported++;
         }
@@ -129,19 +132,21 @@ public class ExPullService {
         return items;
     }
 
-    private Long mappedState(long bindingId, String externalStatus) {
+    private Long mappedState(long bindingId, String externalStatus, long workspaceId) {
         List<Long> rows = jdbc.queryForList(
                 "SELECT state_id FROM ex_status_map WHERE binding_id=? AND external_status=?",
                 Long.class, bindingId, externalStatus);
         if (rows.isEmpty()) {
             List<Long> fallback = jdbc.queryForList(
-                    "SELECT id FROM wi_flow_state WHERE category='NEW' ORDER BY sort_no LIMIT 1", Long.class);
+                    "SELECT s.id FROM wi_flow_state s JOIN wi_flow f ON f.id=s.flow_id"
+                            + " WHERE s.workspace_id=" + workspaceId + " AND s.category='NEW' AND f.deleted_at IS NULL"
+                            + " ORDER BY s.sort_no LIMIT 1", Long.class);
             return fallback.isEmpty() ? null : fallback.get(0);
         }
         return rows.get(0);
     }
 
-    private Long mappedFlow(long bindingId) {
+    private Long mappedFlow(long bindingId, long workspaceId) {
         List<Long> rows = jdbc.queryForList(
                 "SELECT f.id FROM wi_flow f JOIN ex_status_map m ON m.state_id IN (SELECT id FROM wi_flow_state WHERE flow_id=f.id) WHERE m.binding_id=? LIMIT 1",
                 Long.class, bindingId);
@@ -149,15 +154,15 @@ public class ExPullService {
             return rows.get(0);
         }
         List<Long> fallback = jdbc.queryForList(
-                "SELECT id FROM wi_flow WHERE workspace_id=" + ws() + " AND deleted_at IS NULL ORDER BY is_default DESC, id LIMIT 1", Long.class);
+                "SELECT id FROM wi_flow WHERE workspace_id=" + workspaceId + " AND deleted_at IS NULL ORDER BY is_default DESC, id LIMIT 1", Long.class);
         return fallback.isEmpty() ? null : fallback.get(0);
     }
 
-    private Long insertTicket(String title, String body, String source, String externalId, Long flowId, Long stateId) {
+    private Long insertTicket(String title, String body, String source, String externalId, Long flowId, Long stateId, long workspaceId) {
         org.springframework.jdbc.support.KeyHolder keyHolder = new org.springframework.jdbc.support.GeneratedKeyHolder();
         jdbc.update(con -> {
             java.sql.PreparedStatement ps = con.prepareStatement(
-                    "INSERT INTO wi_ticket (workspace_id, title, body_md, type, priority, flow_id, state_id, external_source, external_id, version) VALUES (" + ws() + ",?,?, 'REQ', 2,?,?,?,?, 0)",
+                    "INSERT INTO wi_ticket (workspace_id, title, body_md, type, priority, flow_id, state_id, external_source, external_id, version) VALUES (" + workspaceId + ",?,?, 'REQ', 2,?,?,?,?, 0)",
                     java.sql.PreparedStatement.RETURN_GENERATED_KEYS);
             ps.setString(1, title);
             ps.setString(2, body);

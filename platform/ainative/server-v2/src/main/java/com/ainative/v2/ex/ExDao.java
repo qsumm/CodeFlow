@@ -19,7 +19,7 @@ public class ExDao {
     }
 
 
-    public record Binding(long id, String provider, String projectId, String name, String status, String configJson) {}
+    public record Binding(long id, long workspaceId, String provider, String projectId, String name, String status, String configJson) {}
     public record StatusMap(long id, long bindingId, String externalStatus, long stateId) {}
 
     private final JdbcTemplate jdbc;
@@ -35,15 +35,15 @@ public class ExDao {
 
     // ── 绑定 ──
     public List<Binding> bindings(String provider) {
-        return jdbc.query("SELECT id, provider, project_id, name, status, config_json FROM ex_binding WHERE workspace_id=" + ws() + " AND provider=? AND deleted_at IS NULL ORDER BY id DESC",
-                (rs, i) -> new Binding(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4),
-                        rs.getString(5), rs.getString(6)), provider);
+        return jdbc.query("SELECT id, workspace_id, provider, project_id, name, status, config_json FROM ex_binding WHERE workspace_id=" + ws() + " AND provider=? AND deleted_at IS NULL ORDER BY id DESC",
+                (rs, i) -> new Binding(rs.getLong(1), rs.getLong(2), rs.getString(3), rs.getString(4),
+                        rs.getString(5), rs.getString(6), rs.getString(7)), provider);
     }
 
     public Optional<Binding> findBinding(long id) {
-        List<Binding> rows = jdbc.query("SELECT id, provider, project_id, name, status, config_json FROM ex_binding WHERE id=? AND deleted_at IS NULL",
-                (rs, i) -> new Binding(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4),
-                        rs.getString(5), rs.getString(6)), id);
+        List<Binding> rows = jdbc.query("SELECT id, workspace_id, provider, project_id, name, status, config_json FROM ex_binding WHERE id=? AND deleted_at IS NULL",
+                (rs, i) -> new Binding(rs.getLong(1), rs.getLong(2), rs.getString(3), rs.getString(4),
+                        rs.getString(5), rs.getString(6), rs.getString(7)), id);
         return rows.stream().findFirst();
     }
 

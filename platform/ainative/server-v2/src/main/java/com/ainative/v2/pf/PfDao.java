@@ -66,10 +66,22 @@ public class PfDao {
     }
 
     // ── 审计 ──
+    /**
+     * 审计日志(前端 AuditLog 契约):module/action/riskLevel/actorId/actorType/actorName/
+     * targetType/targetId/detail/detailJson/gmtCreate。module 由 action 的首段拆出
+     * (写埋点的 action 形如 "workitems.create"),actorName 联 id_user 补齐。
+     */
     public List<Map<String, Object>> auditLogs(int pageNum, int pageSize) {
         int size = Math.max(1, Math.min(pageSize, 100));
         int offset = (Math.max(1, pageNum) - 1) * size;
-        return jdbc.queryForList("SELECT id, actor_id AS actorId, action, target_type AS targetType, target_id AS targetId, gmt_create AS gmtCreate FROM pf_audit WHERE workspace_id=" + ws() + " ORDER BY id DESC LIMIT ? OFFSET ?", size, offset);
+        return jdbc.queryForList(
+                "SELECT a.id, SUBSTRING_INDEX(a.action, '.', 1) AS module, a.action,"
+                        + " a.actor_id AS actorId, 'USER' AS actorType, COALESCE(u.nickname, u.username) AS actorName,"
+                        + " a.target_type AS targetType, a.target_id AS targetId,"
+                        + " a.detail_json AS detailJson, LEFT(COALESCE(a.detail_json,''),200) AS detail,"
+                        + " a.gmt_create AS gmtCreate"
+                        + " FROM pf_audit a LEFT JOIN id_user u ON u.id=a.actor_id"
+                        + " WHERE a.workspace_id=" + ws() + " ORDER BY a.id DESC LIMIT ? OFFSET ?", size, offset);
     }
 
     public long countAudit() {
@@ -194,10 +206,6 @@ public class PfDao {
     // ── 自进化 / 备份 / 调试日志 ──
     public List<Map<String, Object>> evolutionProposals() {
         return jdbc.queryForList("SELECT id, title, status FROM pf_evolution_proposal WHERE workspace_id=" + ws() + " AND deleted_at IS NULL ORDER BY id DESC");
-    }
-
-    public List<Map<String, Object>> backups() {
-        return jdbc.queryForList("SELECT id, name, status, gmt_create AS gmtCreate FROM pf_backup WHERE workspace_id=" + ws() + " AND deleted_at IS NULL ORDER BY id DESC");
     }
 
     public List<Map<String, Object>> debugLogs(long ticketId) {
