@@ -160,6 +160,6 @@ cd platform/ainative/server-v2 && scripts/run-tests.sh    # 53 用例，宿主�
 
 <img src="assets/wechat-qrcode.jpg" width="200" alt="公众号「一鸣AI编程」">
 
-**微信扫码关注「一鸣AI编程」** · 回复 `codeflow` 拿手册、部署包与演示环境 · 还有 **CodeFlow 专属技术答疑群**
+**微信扫码关注「一鸣AI编程」** · 回复 `codeflow` 进 **CodeFlow 专属技术答疑群**，拿手册、部署包与演示环境
 
 </div>
