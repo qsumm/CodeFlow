@@ -31,15 +31,18 @@ public class McpToolService {
     private final JdbcTemplate jdbc;
     private final WorkitemService workitems;
     private final AssetService assets;
+    private final com.ainative.v2.artifact.ArtifactStorage artifactStorage;
     private final MemoryService memories;
     private final AgentService agents;
     private final PfService platform;
 
     public McpToolService(JdbcTemplate jdbc, WorkitemService workitems, AssetService assets,
+                           com.ainative.v2.artifact.ArtifactStorage artifactStorage,
                           MemoryService memories, AgentService agents, PfService platform) {
         this.jdbc = jdbc;
         this.workitems = workitems;
         this.assets = assets;
+        this.artifactStorage = artifactStorage;
         this.memories = memories;
         this.agents = agents;
         this.platform = platform;
@@ -91,7 +94,32 @@ public class McpToolService {
         tools.add(tool("ainative.list_scheduled_tasks", "列出定时任务"));
         tools.add(tool("ainative.list_artifacts", "列出工单的产物",
                 Map.of("workitemId", num("工单 ID"))));
+        tools.add(tool("ainative.read_artifact", "读取工单某个产物的内容(返工时把上一轮产出读回来改)",
+                Map.of("workitemId", num("工单 ID"), "artifactId", num("产物 ID"))));
         return tools;
+    }
+
+    /** 读回产物内容:返工场景数字员工要把上一轮产出读回来改,只给元数据等于产物只进不出。 */
+    private Map<String, Object> readArtifact(long workitemId, long artifactId) {
+        List<Map<String, Object>> artifacts = assets.artifactsOf(workitemId);
+        Map<String, Object> target = artifacts.stream()
+                .filter(x -> ((Number) x.get("id")).longValue() == artifactId)
+                .findFirst()
+                .orElseThrow(() -> new com.ainative.v2.common.BizException("20003", "产物不存在"));
+        String objectKey = String.valueOf(target.get("objectKey"));
+        try {
+            byte[] content = artifactStorage.read(objectKey);
+            String text = new String(content, java.nio.charset.StandardCharsets.UTF_8);
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("id", artifactId);
+            out.put("name", target.get("name"));
+            out.put("objectKey", objectKey);
+            out.put("sizeBytes", target.get("sizeBytes"));
+            out.put("content", text);
+            return out;
+        } catch (java.io.IOException e) {
+            throw new com.ainative.v2.common.BizException("10500", "读取产物失败: " + e.getMessage());
+        }
     }
 
     private Map<String, Object> tool(String name, String description) {
@@ -168,6 +196,8 @@ public class McpToolService {
             case "ainative.list_repos" -> assets.listRepos();
             case "ainative.list_scheduled_tasks" -> platform.tasks();
             case "ainative.list_artifacts" -> assets.artifactsOf(longArg(a, "workitemId", true));
+            case "ainative.read_artifact" -> readArtifact(longArg(a, "workitemId", true),
+                    longArg(a, "artifactId", true));
             default -> throw new BizException("10602", "未知工具:" + name);
         };
     }

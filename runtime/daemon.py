@@ -101,6 +101,11 @@ def make_provider(cfg: Config):
     raise ConfigError(f"unknown provider: {cfg.provider}")
 
 
+def _is_max_turns(error: str) -> bool:
+    """结果是不是撞了 CLI 的步数上限(claude: error_max_turns)。"""
+    return "error_max_turns" in (error or "")
+
+
 def conversation_workdir(data_dir: str, conversation_id: int) -> Path:
     """澄清会话工作目录:返回前必须已存在。
 
@@ -248,6 +253,17 @@ class Daemon:
                                  prev_session=session_ref,
                                  emit_event=lambda ev: self._emit_progress(did, ev))
                 result = self.provider.run(step, ctx)
+                # 撞步数上限不算"失败":已经跑了几十轮,产出多半有用。
+                # 续一轮"收尾"(禁止再调工具,基于已有结果给交代),把硬失败变成有交代的部分完成。
+                if result.state != "completed" and _is_max_turns(result.error):
+                    wrap_ctx = RunContext(dispatch_id=did, capsule=capsule,
+                                         workdir=type("W", (), {"root": workdir})(),
+                                         prev_session=result.session_ref or session_ref,
+                                         emit_event=lambda ev: self._emit_progress(did, ev))
+                    wrap = self.provider.run_wrapup(step, wrap_ctx)
+                    if wrap.state == "completed":
+                        log.info("dispatch.wrapup_recovered", dispatch_id=did, step=step.name)
+                        result = wrap
                 for ev in result.events:
                     self.store.add_event(did, ev.type, step_order=ev.step_order,
                                          step_id=ev.step_id, step_name=ev.step_name)
@@ -262,6 +278,12 @@ class Daemon:
                 steps_done += 1
             success = not failures
             summary = ("; ".join(summaries) if success else "; ".join(failures))[:2000] or "completed"
+            # 产物回传:先传产物再报结果 —— 验收角色读不到产物,独立验收这一环就跑不起来
+            try:
+                from .artifacts import upload_artifacts
+                upload_artifacts(dispatch, workdir, log=log)
+            except Exception as e:  # noqa: BLE001
+                log.warn("artifact.upload_failed_dispatch", dispatch_id=did, error=repr(e)[:160])
             self.send_frame(frames.task_result(did, success, summary, ""), dispatch_id=did)
             self.store.mark_terminal(did, success)
             log.info("dispatch.finished", dispatch_id=did, success=success, steps_done=steps_done)

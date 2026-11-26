@@ -54,6 +54,14 @@ public class DispatchLaunchService {
         this.signer = signer;
     }
 
+    /**
+     * 工单正文进入任务包的字节上限(UTF-8)。
+     *
+     * <p>取值留足余量给运行节点侧的接收缓冲(4MB),同时拦住「正文长到没法派发」的工单,
+     * 给出可读提示而不是让运行节点收到一句 1009 断连。
+     */
+    static final int MAX_WORKITEM_BODY_BYTES = 512 * 1024;
+
     /** 返回 dispatchId;无在线执行器时 run 置 PENDING 并返回 id。 */
     @Transactional
     public long start(long ticketId, long agentId, Long sdlcId) {
@@ -71,13 +79,24 @@ public class DispatchLaunchService {
         Map<String, Object> ticket = jdbc.queryForMap(
                 "SELECT title, body_md, sdlc_id FROM wi_ticket WHERE id=? AND deleted_at IS NULL", ticketId);
         Long effectiveSdlcId = sdlcId != null ? sdlcId : (Long) ticket.get("sdlc_id");
-        List<Map<String, Object>> steps = stepsOf(effectiveSdlcId);
+        List<Map<String, Object>> steps = stepsOf(effectiveSdlcId, agentId);
         Persona.Snapshot persona = personaOf(agentId);
         List<Map<String, Object>> roster = roster(workspaceId);
         // 快照在派发时冻结:人设/名册/工单/步骤任一项被改动,重建包体都会与派发时字节不同,
         // 运行器按帧里的 md5 校验下载就会失败。
+        // 派发前置校验:任务包会原样带上工单正文。超限时运行节点只会收到一句
+        // "message was too big" 的断连,现场无从判断是需求太长还是别的毛病。
+        // 这里先拦住并给可读的提示,让需求方知道该往哪改。
+        String bodyMd = (String) ticket.get("body_md");
+        int bodyBytes = bodyMd == null ? 0 : bodyMd.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+        if (bodyBytes > MAX_WORKITEM_BODY_BYTES) {
+            throw new com.ainative.v2.common.BizException("15030",
+                    "工单正文过长（" + bodyBytes + " 字节），任务包放不下。上限 "
+                            + MAX_WORKITEM_BODY_BYTES + " 字节。请把正文精简为执行要点"
+                            + "（完整规格放产物区，并在正文里给出链接与要点摘要）后重试。");
+        }
         DispatchSnapshot snapshot = new DispatchSnapshot(persona,
-                String.valueOf(ticket.get("title")), (String) ticket.get("body_md"), steps, roster);
+                String.valueOf(ticket.get("title")), bodyMd, steps, roster);
         CapsuleBuilder.Capsule capsule = capsuleBuilder.build(
                 snapshot.ticketTitle(), snapshot.ticketBodyMd(), snapshot.steps(),
                 snapshot.persona(), snapshot.roster());
@@ -162,8 +181,9 @@ public class DispatchLaunchService {
         Persona.Snapshot persona = agentId == null
                 ? Persona.snapshotOf("AI 成员", "FS_DEV", "", "", "")
                 : personaOf(agentId);
+        long stepAgentId = agentId == null ? -1L : agentId;
         return capsuleBuilder.build(String.valueOf(ticket.get("title")), (String) ticket.get("body_md"),
-                stepsOf(effectiveSdlcId), persona, roster(runWorkspace));
+                stepsOf(effectiveSdlcId, stepAgentId), persona, roster(runWorkspace));
     }
 
     /** 读数字员工人设(SOUL.md/AGENT.md),装配成可下发的快照。 */
@@ -193,13 +213,31 @@ public class DispatchLaunchService {
         return signer.verify(dispatchId + "." + attempt, key);
     }
 
-    private List<Map<String, Object>> stepsOf(Long sdlcId) {
+    /**
+     * 取出本次派发该执行哪些步骤。
+     *
+     * <p>一次派发只跑**这个数字员工负责的步骤**,不是整条流程:SDLC 的多步是不同角色
+     * 接力。此前把整条流程塞进任务包,运行节点会从第 1 步开始 —— 于是派给
+     * 「前后端全栈开发」的任务,拿着开发人设去执行「需求澄清」,反复澄清到撞
+     * 40 步上限(2026-11-26 实测:dispatch 4 failed,error_max_turns)。
+     *
+     * <p>取该 agent 绑定的步骤;没有绑定就取通用步骤(agent_id 为空);都没有就
+     * 退化成单步「按工单执行」,让运行节点照工单干,而不是替别人做澄清。
+     */
+    private List<Map<String, Object>> stepsOf(Long sdlcId, long agentId) {
         List<Map<String, Object>> steps = new ArrayList<>();
         if (sdlcId != null) {
             for (Map<String, Object> row : jdbc.queryForList(
-                    "SELECT id, seq, name, instruction FROM sq_sdlc_step WHERE sdlc_id=? ORDER BY seq", sdlcId)) {
+                    "SELECT id, seq, name, instruction FROM sq_sdlc_step"
+                            + " WHERE sdlc_id=? AND (agent_id=? OR agent_id IS NULL) ORDER BY seq",
+                    sdlcId, agentId)) {
                 steps.add(step(row.get("id"), row.get("seq"), row.get("name"), row.get("instruction")));
             }
+        }
+        if (steps.isEmpty()) {
+            steps.add(step(-5L, 1, "按工单执行",
+                    "按工单描述完成本次交付;需求边界见工单正文与规格,不替其它角色做澄清。"));
+            return steps;
         }
         if (steps.isEmpty()) {
             steps.add(step(-1, 1, "分析与分支准备", "阅读工单与澄清材料,确认需求边界后开始交付"));

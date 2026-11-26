@@ -31,6 +31,11 @@ from .logging_util import log
 from .providers.claude_code import write_settings_file
 
 CAPABILITY_TIMEOUT_SEC = 120
+
+# 数字员工在自己沙箱工作区里完成交付所需的基础权限:读写文件、查文件、跑命令。
+# 少了这些,非交互模式下 CLI 会直接拒绝写入("Writes are being blocked by the
+# environment's permission layer"),澄清与交付都只能"嘴上说说"。
+WORKSPACE_WRITE_TOOLS = ["Read", "Write", "Edit", "Glob", "Grep", "Bash"]
 TURN_TIMEOUT_SEC = 30 * 60  # 平台 ~11min 会重投;dispatchAttempt 去重保证幂等
 
 
@@ -102,8 +107,14 @@ def write_conversation_settings(workdir: Path, env: dict, mcp_token: str | None)
     picked = {k: v for k, v in env.items()
               if k.startswith("ANTHROPIC_") or k == "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"}
     settings = {"env": picked}
+    # 权限:非交互(-p)模式下未被 allow 的操作会被直接拒绝,不是"问一下"。
+    # 只放行 MCP 的话,数字员工连文件都写不了 —— 澄清时"文件落盘被拒"、
+    # 交付时"代码写不出来"都是这条导致的。这里把写文件与命令一并放行:
+    # 运行节点在自己的沙箱工作区里执行,放开的是它自己的工作区。
+    allow = list(WORKSPACE_WRITE_TOOLS)
     if mcp_token:
-        settings["permissions"] = {"allow": ["mcp__ainative", "mcp__ainative__*"]}
+        allow += ["mcp__ainative", "mcp__ainative__*"]
+    settings["permissions"] = {"allow": allow}
     path = workdir / "claude-settings.json"
     path.write_text(json.dumps(settings, ensure_ascii=False), encoding="utf-8")
     return str(path)
@@ -165,6 +176,8 @@ def build_command(cli_binary: str, content: str, *, session_ref: str | None,
         argv += ["--append-system-prompt", system_prompt]
     if allowed_tools:
         argv += ["--allowedTools", allowed_tools]
+    # acceptEdits:文件写入自动放行(非交互模式没有弹窗可点,不放开就是直接拒绝)
+    argv += ["--permission-mode", "acceptEdits"]
     return argv
 
 

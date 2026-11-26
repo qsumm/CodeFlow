@@ -78,4 +78,11 @@ class Provider(Protocol):
 
     def prepare(self, capsule, workdir: Path) -> None: ...
     def run(self, step: SdlcStep, ctx: RunContext) -> RunResult: ...
+
+    def run_wrapup(self, step: SdlcStep, ctx: RunContext) -> RunResult:
+        """撞步数上限后的收尾轮:基于已有产出给出最终交代(不再调工具)。
+
+        默认不支持 —— 供应商不支持时返回原样失败,上层据此保留真实死因。
+        """
+        return RunResult(state="failed", summary="wrapup unsupported", error="")
     def cleanup(self, run_record: dict) -> None: ...

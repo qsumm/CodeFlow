@@ -38,11 +38,20 @@ def build_command(cli_binary: str, prompt: str, *, session_ref: str | None = Non
         argv += ["--max-turns", str(max_turns)]
     if allowed_tools:
         argv += ["--allowedTools", allowed_tools]
+    # acceptEdits:文件写入自动放行(非交互模式没有弹窗可点,不放开就是直接拒绝)
+    argv += ["--permission-mode", "acceptEdits"]
     if settings_file:
         argv += ["--settings", settings_file]
     if system_prompt:
         argv += ["--append-system-prompt", system_prompt]
     return argv
+
+
+# 收尾轮允许的步数:只让它总结,不再展开工作
+WRAPUP_MAX_TURNS = 12
+
+# 数字员工完成交付所需的基础权限:读写文件、查文件、跑命令(跑测试、装依赖)。
+WORKSPACE_WRITE_TOOLS = ["Read", "Write", "Edit", "Glob", "Grep", "Bash"]
 
 
 def write_settings_file(path: Path, env: dict) -> str:
@@ -51,6 +60,11 @@ def write_settings_file(path: Path, env: dict) -> str:
     picked = {k: v for k, v in env.items()
               if k.startswith("ANTHROPIC_") or k.startswith("CLAUDE_CODE_")}
     settings = {"env": picked}
+    # 权限:非交互(-p)模式下未被 allow 的操作会被直接拒绝。只放行 MCP 时,
+    # 数字员工写不出任何代码 —— 交付链路整条断在"嘴上说说"(2026-11-26 实测:
+    # "Writes are being blocked by the environment's permission layer")。
+    # 运行节点在自己的沙箱工作区执行,这里放开的是它自己的工作区。
+    settings["permissions"] = {"allow": list(WORKSPACE_WRITE_TOOLS)}
     path.write_text(json.dumps(settings, ensure_ascii=False), encoding="utf-8")
     return str(path)
 
@@ -142,13 +156,42 @@ class ClaudeCodeProvider:
         parts.append("完成后把产物写入 deliverables/ 目录。")
         return "\n\n".join(parts)
 
+    def run_wrapup(self, step, ctx: RunContext) -> RunResult:
+        """收尾轮:禁止再调工具,让 AI 基于已有产出给最终交代。
+
+        撞步数上限时它已经跑了几十轮,产出多半有用;硬失败会把这些全丢掉。
+        这里给它一次"别再动手、总结现状"的机会,把失败变成有交代的部分完成。
+        """
+        prompt = ("你已达到本步骤的步数上限。请不要再展开新工作(不要再实现新功能)。"
+                  "但请用只读命令(ls / cat / find)确认当前实际产出了哪些文件,然后基于实际文件"
+                  "给出最终交代:已完成什么、产物路径在哪、未完成什么、建议下一步怎么做。"
+                  "如果你还没写任何代码,直接说明卡在哪里、缺什么信息。")
+        state, summary, error, session_ref = self._run_cli(
+            step, ctx, prompt=prompt, max_turns=WRAPUP_MAX_TURNS)
+        artifacts = sorted((ctx.workdir.root / "deliverables").glob("*"))
+        return RunResult(state=state, summary=summary, error=error,
+                         artifacts=artifacts,
+                         session_ref=session_ref if session_ref != ctx.prev_session else None)
+
     def run(self, step, ctx: RunContext) -> RunResult:
         started = RuntimeEvent("step.started", step.step_order, step.step_id, step.name)
         if ctx.emit_event:
             ctx.emit_event(started)
+        state, summary, error, session_ref = self._run_cli(
+            step, ctx, prompt=self._prompt(step, ctx.capsule), max_turns=self.max_turns)
+        artifacts = sorted((ctx.workdir.root / "deliverables").glob("*"))
+        completed = RuntimeEvent("step.completed", step.step_order, step.step_id, step.name,
+                                 message=state)
+        if ctx.emit_event:
+            ctx.emit_event(completed)
+        return RunResult(state=state, summary=summary, error=error,
+                         events=[started, completed], artifacts=artifacts,
+                         session_ref=session_ref if session_ref != ctx.prev_session else None)
 
-        argv = build_command(self.cli_binary, self._prompt(step, ctx.capsule),
-                             session_ref=ctx.prev_session, max_turns=self.max_turns,
+    def _run_cli(self, step, ctx: RunContext, *, prompt: str, max_turns: int):
+        """跑一轮 CLI,返回 (state, summary, error, session_ref)。"""
+        argv = build_command(self.cli_binary, prompt,
+                             session_ref=ctx.prev_session, max_turns=max_turns,
                              system_prompt=self._system_prompt(ctx.capsule),
                              allowed_tools=self.allowed_tools,
                              settings_file=getattr(self, "_settings_path", None))
@@ -199,14 +242,7 @@ class ClaudeCodeProvider:
                                               proc.returncode)
             summary = summary or f"claude exited with {proc.returncode}"
 
-        artifacts = sorted((ctx.workdir.root / "deliverables").glob("*"))
-        completed = RuntimeEvent("step.completed", step.step_order, step.step_id, step.name,
-                                 message=state)
-        if ctx.emit_event:
-            ctx.emit_event(completed)
-        return RunResult(state=state, summary=summary, error=error,
-                         events=[started, completed], artifacts=artifacts,
-                         session_ref=session_ref if session_ref != ctx.prev_session else None)
+        return state, summary, error, session_ref
 
     def cleanup(self, run_record: dict) -> None:
         pass
